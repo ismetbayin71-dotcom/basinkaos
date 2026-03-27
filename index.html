@@ -2,21 +2,21 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Collision Sürümü</title>
+    <title>Office Sabotage - Collision Fix</title>
     <style>
-        body { background: #000; color: white; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
+        body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
         canvas { background: #111; border: 2px solid #333; cursor: crosshair; }
-        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; font-size: 13px; z-index: 10; border: 1px solid #444; }
-        .status-ok { color: #2ecc71; }
+        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 10px; border: 1px solid #444; color: white; min-width: 180px; }
+        .status { font-weight: bold; padding: 2px 5px; border-radius: 3px; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <b>DURUM:</b> <span id="load-status">Dosyalar Yükleniyor...</span><br>
-        <b>FİZİK:</b> <span class="status-ok">Pembe Maske Aktif</span><br>
-        <hr style="border:0; border-top:1px solid #444; margin:8px 0;">
-        <small>W-A-S-D veya Sol Tık ile hareket et.</small>
+        <b>SİSTEM DURUMU</b><br>
+        Fizik: <span id="phys-status" class="status" style="background: #c0392b;">Yükleniyor...</span><br>
+        <hr style="border:0; border-top:1px solid #444; margin:10px 0;">
+        <small>W-A-S-D: Hareket<br>Mouse Tık: Git</small>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -24,17 +24,20 @@
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-        const loadStatus = document.getElementById("load-status");
+        const physStatus = document.getElementById("phys-status");
 
+        // GÖRSELLERİ ÖZEL AYARLA YÜKLE
         const mapImg = new Image();
-        mapImg.src = 'map.png'; // Senin çizdiğin ana ofis
+        mapImg.crossOrigin = "Anonymous"; 
+        mapImg.src = 'map.png?v=' + Date.now(); // Cache temizleme için timestamp
 
         const collImg = new Image();
-        collImg.src = 'collision.png'; // Pembe çizgili fizik haritası
+        collImg.crossOrigin = "Anonymous";
+        collImg.src = 'collision.png?v=' + Date.now();
 
-        let game = { zoom: 2.0 };
+        let game = { zoom: 1.8 };
         let player = {
-            x: 550, y: 300, // Merdiven boşluğu civarı güvenli spawn
+            x: 450, y: 350, // Güvenli spawn
             radius: 10,
             color: '#c0392b',
             speed: 3.5,
@@ -48,57 +51,54 @@
         let mouse = { x: 0, y: 0 };
         let collisionCtx = null;
 
-        // --- DOSYA YÜKLEME KONTROLÜ ---
-        let loadedCount = 0;
-        function itemLoaded() {
-            loadedCount++;
-            if(loadedCount === 2) {
-                setupCollision();
-                loadStatus.innerText = "Sistem Hazır!";
+        let imagesLoaded = 0;
+        function checkLoad() {
+            imagesLoaded++;
+            if(imagesLoaded === 2) {
+                initCollision();
+                physStatus.innerText = "AKTİF";
+                physStatus.style.background = "#27ae60";
                 requestAnimationFrame(gameLoop);
             }
         }
-        mapImg.onload = itemLoaded;
-        collImg.onload = itemLoaded;
+        mapImg.onload = checkLoad;
+        collImg.onload = checkLoad;
 
-        function setupCollision() {
-            const c = document.createElement('canvas');
-            c.width = collImg.width;
-            c.height = collImg.height;
-            collisionCtx = c.getContext('2d', { willReadFrequently: true });
+        function initCollision() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = collImg.width;
+            tempCanvas.height = collImg.height;
+            collisionCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
             collisionCtx.drawImage(collImg, 0, 0);
         }
 
-        // --- ÇARPIŞMA SORGUSU ---
+        // --- ÇARPIŞMA KONTROLÜ ---
         function canMoveTo(nx, ny) {
             if (!collisionCtx) return true;
 
-            // Karakterin etrafındaki 4 noktayı kontrol et
-            const margin = 8;
-            const points = [
+            // Karakterin etrafındaki 8 noktayı kontrol ederek duvarın içine sızmayı engelle
+            const checkPoints = [
                 {x: nx, y: ny},
-                {x: nx - margin, y: ny},
-                {x: nx + margin, y: ny},
-                {x: nx, y: ny - margin},
-                {x: nx, y: ny + margin}
+                {x: nx - 9, y: ny}, {x: nx + 9, y: ny},
+                {x: nx, y: ny - 9}, {x: nx, y: ny + 9},
+                {x: nx - 6, y: ny - 6}, {x: nx + 6, y: ny + 6}
             ];
 
-            for (let p of points) {
+            for (let p of checkPoints) {
                 if (p.x < 0 || p.x > collImg.width || p.y < 0 || p.y > collImg.height) return false;
 
                 const pixel = collisionCtx.getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data;
-                const r = pixel[0], g = pixel[1], b = pixel[2];
+                const r = pixel[0], g = pixel[1], b = pixel[2], a = pixel[3];
 
-                // PEMBE KONTROLÜ (R yüksek, G düşük, B yüksek)
-                // Çizimindeki pembe tonu için: R > 200, G < 150, B > 150
-                if (r > 200 && g < 150 && b > 150) {
+                // Şeffaf olmayan ve Pembe (veya Pembeye yakın) olan her şeyi blokla
+                // Senin çizimindeki pembe tonu: R ve B yüksek, G düşük
+                if (a > 0 && r > 150 && b > 150 && g < 160) {
                     return false; 
                 }
             }
             return true;
         }
 
-        // --- GİRDİLER ---
         window.addEventListener("keydown", e => keys[e.code] = true);
         window.addEventListener("keyup", e => keys[e.code] = false);
         canvas.addEventListener("mousedown", e => { if(e.button === 0) player.isMouseMoving = true; });
@@ -111,11 +111,8 @@
 
         function update() {
             let mx = 0, my = 0;
-
-            if (keys["KeyW"]) my -= 1;
-            if (keys["KeyS"]) my += 1;
-            if (keys["KeyA"]) mx -= 1;
-            if (keys["KeyD"]) mx += 1;
+            if (keys["KeyW"]) my -= 1; if (keys["KeyS"]) my += 1;
+            if (keys["KeyA"]) mx -= 1; if (keys["KeyD"]) mx += 1;
 
             if (mx === 0 && my === 0 && player.isMouseMoving) {
                 const worldM = { x: mouse.x / game.zoom + camera.x, y: mouse.y / game.zoom + camera.y };
@@ -127,7 +124,7 @@
                 const nextX = player.x + Math.cos(angle) * player.speed;
                 const nextY = player.y + Math.sin(angle) * player.speed;
 
-                // X ve Y eksenlerini ayrı ayrı kontrol et (Duvara sürtünme için)
+                // Sürtünme fiziği (Kayma hissi)
                 if (canMoveTo(nextX, player.y)) player.x = nextX;
                 if (canMoveTo(player.x, nextY)) player.y = nextY;
                 
@@ -144,7 +141,7 @@
             ctx.scale(game.zoom, game.zoom);
             ctx.translate(-camera.x, -camera.y);
 
-            ctx.drawImage(mapImg, 0, 0); // Görsel ofis haritası
+            ctx.drawImage(mapImg, 0, 0); 
             
             // Oyuncu
             ctx.save();
@@ -152,10 +149,10 @@
             ctx.rotate(player.angle);
             ctx.fillStyle = player.color;
             ctx.beginPath(); ctx.arc(0, 0, player.radius, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#add8e6"; ctx.fillRect(4, -4, 6, 5); // Gözlük
+            ctx.fillStyle = "#add8e6"; ctx.fillRect(3, -4, 7, 5); // Vizör
             ctx.restore();
 
-            // Sis (Görüş)
+            // Among Us Görüş Sistemi
             applyVision();
 
             ctx.restore();
@@ -164,14 +161,14 @@
         function applyVision() {
             ctx.save();
             ctx.globalCompositeOperation = 'destination-in';
-            let grad = ctx.createRadialGradient(player.x, player.y, 40, player.x, player.y, player.visionRadius);
+            let grad = ctx.createRadialGradient(player.x, player.y, 50, player.x, player.y, player.visionRadius);
             grad.addColorStop(0, 'rgba(0,0,0,1)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = grad;
             ctx.beginPath(); ctx.arc(player.x, player.y, player.visionRadius, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
             ctx.globalCompositeOperation = 'destination-over';
             ctx.fillStyle = "black";
-            ctx.fillRect(camera.x, camera.y, canvas.width/game.zoom, canvas.height/game.zoom);
+            ctx.fillRect(camera.x - 50, camera.y - 50, (canvas.width/game.zoom) + 100, (canvas.height/game.zoom) + 100);
             ctx.globalCompositeOperation = 'source-over';
         }
 
