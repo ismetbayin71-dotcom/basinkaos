@@ -2,19 +2,18 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Line of Sight</title>
+    <title>Office Sabotage - Click to Move</title>
     <style>
         body { background: #000; color: white; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-        canvas { background: #111; border: 2px solid #333; }
+        canvas { background: #111; border: 2px solid #333; cursor: crosshair; }
         #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; font-size: 13px; z-index: 10; }
-        .key { background: #444; padding: 2px 6px; border-radius: 4px; color: #f1c40f; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        KONTROLLER: <span class="key">W-A-S-D</span> | FİZİK: <span style="color:#e74c3c">Pasif (Serbest Dolaşım)</span><br>
-        GÖRÜŞ MODU: <span style="color:#f1c40f">Sadece Baktığın Yön (Fener)</span>
+        HAREKET: <span style="color:#f1c40f">Fare Sol Tık (Hedef Belirle)</span><br>
+        DURUM: <span id="status">Bekliyor</span>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -22,142 +21,126 @@
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
+        const statusText = document.getElementById("status");
 
         const mapImg = new Image();
-        mapImg.src = 'map.png'; // GitHub'daki dosya adın
+        mapImg.src = 'map.png';
 
-        // --- AYARLAR ---
-        let gameSettings = {
-            zoom: 1.8,
-            fov: 110 * (Math.PI / 180) // Görüş açısının büyüklüğü (Derceyi radyana çevirdik, örn: 110 derece)
-        };
+        let game = { zoom: 1.8, fov: 100 * (Math.PI / 180) };
 
         let player = {
-            x: 200, // Başlangıç konumu
-            y: 400, 
+            x: 200, y: 400,
             radius: 12,
-            color: '#c0392b', // Among Us Kırmızı
-            speed: 4.5, // Daha akıcı hareket için hızı artırdık
-            visionRadius: 280, // Fenerin menzili
-            angle: 0 // Başlangıçta sağa bakıyor
+            color: '#c0392b',
+            speed: 4,
+            angle: 0,
+            visionRadius: 320,
+            target: null // Gidilecek hedef noktası {x, y}
         };
 
-        // Kamera objesi
         let camera = { x: 0, y: 0 };
-        let keys = {};
 
-        // --- GİRİŞLER ---
-        window.addEventListener("keydown", e => keys[e.code] = true);
-        window.addEventListener("keyup", e => keys[e.code] = false);
+        // --- TIKLAMA OLAYI ---
+        canvas.addEventListener("mousedown", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
 
-        // --- HARİTA YÜKLENDİĞİNDE ---
-        mapImg.onload = function() {
-            // Renk okuma (collisionCtx) katmanını SİLDİK. Fizik kontrolü pasif.
-            console.log("Sistem Hazır. Harita Boyutu:", mapImg.width, "x", mapImg.height, "Zoom:", gameSettings.zoom);
-            requestAnimationFrame(gameLoop);
-        };
+            // Tıklanan yerin haritadaki gerçek koordinatını hesapla (Zoom ve Kamera dahil)
+            player.target = {
+                x: (clickX / game.zoom) + camera.x,
+                y: (clickY / game.zoom) + camera.y
+            };
+            statusText.innerText = "Yürüyor...";
+        });
+
+        mapImg.onload = () => requestAnimationFrame(gameLoop);
 
         function update() {
-            let dx = 0;
-            let dy = 0;
+            if (player.target) {
+                // Hedefe olan mesafe ve açı
+                const dx = player.target.x - player.x;
+                const dy = player.target.y - player.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
 
-            // W-A-S-D Kontrolü ve Hareket Vektörünü Hesaplama
-            if (keys["KeyW"]) dy -= 1;
-            if (keys["KeyS"]) dy += 1;
-            if (keys["KeyA"]) dx -= 1;
-            if (keys["KeyD"]) dx += 1;
-
-            // Hareket hızı (çapraz yürürken hızlanmayı engellemek için normalize etmedik)
-            player.x += dx * player.speed;
-            player.y += dy * player.speed;
-
-            // --- AÇI VE YÖN HESAPLAMA (DİNAMİK GÖRÜŞ İÇİN) ---
-            // Sadece tuşlara basıldığında açıyı güncelle
-            if (dx !== 0 || dy !== 0) {
-                // Math.atan2, hareket vektörünün açısını (radyan) verir
-                player.angle = Math.atan2(dy, dx);
+                if (distance > 5) { // Hedefe çok yakın değilse yürü
+                    player.angle = Math.atan2(dy, dx);
+                    player.x += Math.cos(player.angle) * player.speed;
+                    player.y += Math.sin(player.angle) * player.speed;
+                } else {
+                    player.target = null; // Hedefe varıldı
+                    statusText.innerText = "Bekliyor";
+                }
             }
 
-            // --- KAMERA TAKİBİ HESAPLAMA ---
-            // Oyuncuyu ekranın merkezine odakla (Zoom değerini hesaba kat)
-            camera.x = player.x - (canvas.width / 2) / gameSettings.zoom;
-            camera.y = player.y - (canvas.height / 2) / gameSettings.zoom;
-
-            // Kameranın harita sınırlarında durmasını SİLDİK. Serbest dolaşım aktif.
+            // Kamera Takibi
+            camera.x = player.x - (canvas.width / 2) / game.zoom;
+            camera.y = player.y - (canvas.height / 2) / game.zoom;
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Kamerayı "kaydır" ve "büyüt"
             ctx.save();
-            ctx.scale(gameSettings.zoom, gameSettings.zoom);
+            ctx.scale(game.zoom, game.zoom);
             ctx.translate(-camera.x, -camera.y);
 
-            // 1. Haritayı çiz (Alt katman)
+            // 1. Harita
             ctx.drawImage(mapImg, 0, 0);
 
-            // 2. Karakteri çiz
-            drawPlayer(player.x, player.y);
+            // 2. Hedef İşaretçisi (Opsiyonel)
+            if (player.target) {
+                ctx.strokeStyle = "rgba(241, 196, 15, 0.5)";
+                ctx.beginPath();
+                ctx.arc(player.target.x, player.target.y, 5, 0, Math.PI*2);
+                ctx.stroke();
+            }
 
-            // 3. FOG OF WAR (Sadece baktığı yönü aydınlat)
+            // 3. Oyuncu
+            drawPlayer();
+
+            // 4. Fener (Görüş Alanı)
             applyLineOfSight();
 
-            ctx.restore(); // Tüm ölçekleme ve kaydırma işlemlerini bitir
-        }
-
-        function drawPlayer(x, y) {
-            ctx.save();
-            ctx.translate(x, y);
-            // Among Us Karakteri
-            ctx.fillStyle = player.color;
-            ctx.beginPath(); ctx.arc(0, 0, player.radius, 0, Math.PI * 2); ctx.fill();
-            // Çanta
-            ctx.fillRect(-player.radius - 4, -4, 5, 12);
-            // Gözlük (Among Us stili, şimdilik sağa bakıyor gibi durur)
-            ctx.fillStyle = "#add8e6"; ctx.fillRect(2, -6, 10, 7);
             ctx.restore();
         }
 
-        // --- DİNAMİK GÖRÜŞ ALANI (LINE OF SIGHT) SİSTEMİ ---
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.angle);
+            
+            ctx.fillStyle = player.color;
+            ctx.beginPath(); ctx.arc(0, 0, player.radius, 0, Math.PI * 2); ctx.fill();
+            ctx.fillRect(-player.radius - 4, -5, 6, 10); // Çanta
+            
+            ctx.fillStyle = "#add8e6";
+            ctx.fillRect(4, -5, 8, 6); // Gözlük
+            ctx.restore();
+        }
+
         function applyLineOfSight() {
             ctx.save();
-            // 'destination-in' modu sayesinde sadece maskenin içini görünür kılacağız
             ctx.globalCompositeOperation = 'destination-in';
 
-            // Fenerin başlangıç ve bitiş açılarını hesapla (Görüş açısı kadar açılır)
-            const startAngle = player.angle - gameSettings.fov / 2;
-            const endAngle = player.angle + gameSettings.fov / 2;
+            const startAngle = player.angle - game.fov / 2;
+            const endAngle = player.angle + game.fov / 2;
 
-            // Fenerin ışığı (Dinamik Degrade)
-            let grad = ctx.createRadialGradient(
-                player.x, player.y, 40,           // İç ışık halkası
-                player.x, player.y, player.visionRadius // Dış karanlık sınırı
-            );
-            
-            grad.addColorStop(0, 'rgba(0,0,0,1)');   // Merkez tam görünür
-            grad.addColorStop(0.9, 'rgba(0,0,0,0.3)'); // Kenarlar flulaşır
-            grad.addColorStop(1, 'rgba(0,0,0,0)');   // Dışarısı tamamen karanlık
+            let grad = ctx.createRadialGradient(player.x, player.y, 30, player.x, player.y, player.visionRadius);
+            grad.addColorStop(0, 'rgba(0,0,0,1)');
+            grad.addColorStop(0.8, 'rgba(0,0,0,0.2)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
 
             ctx.fillStyle = grad;
-
-            // Fener Konisini (Üçgen) Çiz
             ctx.beginPath();
-            ctx.moveTo(player.x, player.y); // Fenerin ucu (Oyuncu)
-            // ctx.arc ile koniyi oluştur (startAngle, endAngle)
+            ctx.moveTo(player.x, player.y);
             ctx.arc(player.x, player.y, player.visionRadius, startAngle, endAngle);
             ctx.closePath();
             ctx.fill();
             
             ctx.restore();
-
-            // Karanlığı en alta/arkaya bas (maskelenmeyen yerler için)
             ctx.globalCompositeOperation = 'destination-over';
             ctx.fillStyle = "black";
-            // Karanlığı tüm haritaya yay (harita boyutu kadar)
             ctx.fillRect(0, 0, mapImg.width, mapImg.height);
-            
-            // Çizim modunu normale döndür
             ctx.globalCompositeOperation = 'source-over';
         }
 
