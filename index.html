@@ -2,21 +2,25 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Zoom Sürümü</title>
+    <title>Office Sabotage - Final Prototype</title>
     <style>
-        body { background: #000; color: white; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-        canvas { background: #111; border: 2px solid #333; box-shadow: 0 0 30px rgba(0,0,0,1); image-rendering: pixelated; /* Piksel art haritalar için daha net görüntü sağlar (isteğe bağlı) */ }
-        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.7); padding: 12px; border-radius: 8px; font-size: 13px; z-index: 10; border: 1px solid #444; }
-        .key { background: #444; padding: 2px 6px; border-radius: 4px; color: #f1c40f; }
+        body { background: #000; color: white; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { background: #111; border: 2px solid #333; box-shadow: 0 0 50px rgba(0,0,0,1); image-rendering: auto; }
+        #ui { position: absolute; top: 20px; left: 20px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; border: 1px solid #444; z-index: 10; min-width: 150px; }
+        .key-hint { color: #f1c40f; font-weight: bold; }
+        #debug-info { margin-top: 10px; font-size: 11px; color: #888; border-top: 1px solid #333; padding-top: 5px; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <b>KONTROLLER:</b> <span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span><br>
-        <b>KAMERA:</b> 2x Zoom Aktif<br>
-        <hr style="border:0; border-top:1px solid #444; margin: 8px 0;">
-        <span id="pos-text">X: 0 Y: 0</span>
+        <div style="font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #555; padding-bottom: 5px;">Ofis Sabotaj v1.0</div>
+        Hareket: <span class="key-hint">W-A-S-D</span><br>
+        Görüş: <span class="key-hint">Aktif (Fog)</span>
+        <div id="debug-info">
+            Konum: <span id="pos-display">200, 400</span><br>
+            Kamera: <span id="cam-display">0, 0</span>
+        </div>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -24,26 +28,27 @@
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-        const posDisplay = document.getElementById("pos-text");
+        const posDisplay = document.getElementById("pos-display");
+        const camDisplay = document.getElementById("cam-display");
 
         const mapImg = new Image();
-        mapImg.src = 'map.png'; // GitHub'daki dosya adın
+        mapImg.src = 'map.png';
 
-        // --- AYARLAR ---
-        let gameSettings = {
-            zoom: 2.0 // 2.0 = %200 büyütme (Daha yakın). 1.5 gibi değerler de deneyebilirsin.
+        // --- OYUNCU VE DÜNYA AYARLARI ---
+        let game = {
+            zoom: 1.8, // %180 yakınlaştırma
+            debugMode: false // true yaparsan duvarların içinden geçebilirsin
         };
 
         let player = {
-            x: 500, // Haritadaki başlangıç konumu
+            x: 200, // Sol koridor (Güvenli başlangıç)
             y: 400, 
-            radius: 12, // Karakter boyutu (Zoom ile 24px gibi görünecek)
-            color: '#c0392b', 
-            speed: 3.5, // Daha yavaş yürüyüş, Among Us tarzına uygun
-            vision: 280 // Görüş mesafesi (Haritadaki pixel cinsinden)
+            radius: 12, 
+            color: '#c0392b', // Among Us Kırmızı
+            speed: 4,
+            vision: 280
         };
 
-        // Kamera objesi
         let camera = { x: 0, y: 0 };
         let keys = {};
         let collisionCtx = null;
@@ -52,45 +57,45 @@
         window.addEventListener("keydown", e => keys[e.code] = true);
         window.addEventListener("keyup", e => keys[e.code] = false);
 
-        // --- HARİTA YÜKLENDİĞİNDE ---
         mapImg.onload = function() {
-            // Gizli canvas (Çarpışma Kontrolü için)
+            // Çarpışma verilerini okumak için arka plan canvas'ı
             const collCanvas = document.createElement('canvas');
             collCanvas.width = mapImg.width;
             collCanvas.height = mapImg.height;
             collisionCtx = collCanvas.getContext('2d', { willReadFrequently: true });
             collisionCtx.drawImage(mapImg, 0, 0);
             
-            console.log("Sistem Hazır. Harita Boyutu:", mapImg.width, "x", mapImg.height, "Zoom:", gameSettings.zoom);
             requestAnimationFrame(gameLoop);
         };
 
-        // --- AKILLI ÇARPIŞMA SİSTEMİ ---
+        // --- GELİŞMİŞ ÇARPIŞMA SİSTEMİ ---
         function canMoveTo(nx, ny) {
+            if (game.debugMode) return true; // Debug açıksa duvar yok
             if (!collisionCtx) return true;
 
-            // Karakterin etrafındaki 5 noktayı kontrol et
-            const points = [
+            const checkPoints = [
                 {x: nx, y: ny},             // Merkez
-                {x: nx - 10, y: ny},        // Sol
-                {x: nx + 10, y: ny},        // Sağ
-                {x: nx, y: ny - 10},        // Üst
-                {x: nx, y: ny + 10}         // Alt
+                {x: nx - 8, y: ny},         // Sol kenar
+                {x: nx + 8, y: ny},         // Sağ kenar
+                {x: nx, y: ny - 8},         // Üst kenar
+                {x: nx, y: ny + 8}          // Alt kenar
             ];
 
-            for (let p of points) {
-                // Harita sınırlarını kontrol et
+            for (let p of checkPoints) {
+                // Harita sınırları dışı
                 if (p.x < 0 || p.x > mapImg.width || p.y < 0 || p.y > mapImg.height) return false;
 
                 const pixel = collisionCtx.getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data;
                 const r = pixel[0], g = pixel[1], b = pixel[2];
 
-                // 1. Koyu Renkli Duvarlar & Masalar (RGB < 70)
-                if (r < 70 && g < 70 && b < 70) return false;
+                // DUVAR: Siyah alanlar (RGB < 60)
+                if (r < 60 && g < 60 && b < 60) return false;
 
-                // 2. Parlak Beyaz Pencereler (RGB > 235)
-                // Yer karoların (bej) RGB toplamı genelde 200-220 civarıdır. Pencereler 235+
-                if (r > 235 && g > 235 && b > 235) return false;
+                // PENCERE: Parlak beyaz alanlar (RGB > 230)
+                if (r > 230 && g > 230 && b > 230) return false;
+                
+                // MASA: Koyu kahve/gri tonları
+                if (r > 150 && r < 190 && g > 130 && g < 170) return false; 
             }
             return true;
         }
@@ -99,94 +104,75 @@
             let nextX = player.x;
             let nextY = player.y;
 
-            // W-A-S-D Kontrolü
             if (keys["KeyW"]) nextY -= player.speed;
             if (keys["KeyS"]) nextY += player.speed;
             if (keys["KeyA"]) nextX -= player.speed;
             if (keys["KeyD"]) nextX += player.speed;
 
-            // Çarpışma Kontrolü (Duvara sürtünerek yürüme efekti)
+            // X ve Y çarpışmaları ayrı ayrı kontrol (Duvara sürtünme için)
             if (canMoveTo(nextX, player.y)) player.x = nextX;
             if (canMoveTo(player.x, nextY)) player.y = nextY;
 
-            // --- KAMERA HESAPLAMA (ZOOM UYUMLU) ---
-            // Oyuncuyu ekranın merkezine odakla (Zoom değerini hesaba kat)
-            camera.x = player.x - (canvas.width / 2) / gameSettings.zoom;
-            camera.y = player.y - (canvas.height / 2) / gameSettings.zoom;
+            // Kamera Takibi
+            camera.x = player.x - (canvas.width / 2) / game.zoom;
+            camera.y = player.y - (canvas.height / 2) / game.zoom;
 
-            // Kameranın harita dışına taşmasını engelle (İsteğe bağlı)
+            // Harita sınırlarında kamerayı durdur
             if (camera.x < 0) camera.x = 0;
             if (camera.y < 0) camera.y = 0;
-            if (camera.x > mapImg.width - canvas.width / gameSettings.zoom) camera.x = mapImg.width - canvas.width / gameSettings.zoom;
-            if (camera.y > mapImg.height - canvas.height / gameSettings.zoom) camera.y = mapImg.height - canvas.height / gameSettings.zoom;
+            if (camera.x > mapImg.width - canvas.width / game.zoom) camera.x = mapImg.width - canvas.width / game.zoom;
+            if (camera.y > mapImg.height - canvas.height / game.zoom) camera.y = mapImg.height - canvas.height / game.zoom;
 
-            posDisplay.innerText = `X: ${Math.round(player.x)} Y: ${Math.round(player.y)}`;
+            posDisplay.innerText = `${Math.round(player.x)}, ${Math.round(player.y)}`;
+            camDisplay.innerText = `${Math.round(camera.x)}, ${Math.round(camera.y)}`;
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Kamerayı "kaydır" ve "büyüt"
             ctx.save();
-            
-            // --- ZOOM VE KAMERA KAYDIRMA MANTIĞI ---
-            // 1. Tüm dünyayı zoom değeri kadar büyüt (Ekrana yakınlaştır)
-            ctx.scale(gameSettings.zoom, gameSettings.zoom);
-            // 2. Dünyayı kameranın tersi yönünde kaydır (Oyuncunun ekranın ortasında kalmasını sağlar)
+            ctx.scale(game.zoom, game.zoom);
             ctx.translate(-camera.x, -camera.y);
 
-            // 1. Haritayı çiz (Alt katman)
+            // 1. Harita
             ctx.drawImage(mapImg, 0, 0);
 
-            // 2. Karakteri çiz
+            // 2. Oyuncu
             drawPlayer(player.x, player.y);
 
-            // 3. Sis (Fog of War) uygula
-            // Sis, oyuncu etrafında bir radial gradient (fener ışığı) oluşturur
+            // 3. Sis (Fog)
             applyFogOfWar();
 
-            ctx.restore(); // Tüm ölçekleme ve kaydırma işlemlerini bitir
+            ctx.restore();
         }
 
         function drawPlayer(x, y) {
             ctx.save();
             ctx.translate(x, y);
-            // Among Us Karakteri
+            // Karakter Gövdesi
             ctx.fillStyle = player.color;
             ctx.beginPath(); ctx.arc(0, 0, player.radius, 0, Math.PI * 2); ctx.fill();
             // Çanta
-            ctx.fillRect(-player.radius - 4, -4, 5, 12);
+            ctx.fillRect(-player.radius - 4, -4, 6, 14);
             // Gözlük
-            ctx.fillStyle = "#add8e6"; ctx.fillRect(2, -6, 10, 7);
+            ctx.fillStyle = "#add8e6"; ctx.fillRect(2, -7, 12, 8);
             ctx.restore();
         }
 
         function applyFogOfWar() {
             ctx.save();
-            // 'destination-in' modu sayesinde sadece maskenin içini görünür kılacağız
             ctx.globalCompositeOperation = 'destination-in';
-
-            // Karakterin merkezinden dışarı doğru açılan ışık hüzmesi
-            let grad = ctx.createRadialGradient(
-                player.x, player.y, 60,           // İç ışık halkası
-                player.x, player.y, player.vision // Dış karanlık sınırı
-            );
-            
-            grad.addColorStop(0, 'rgba(0,0,0,1)');   // Merkez tam görünür
-            grad.addColorStop(0.8, 'rgba(0,0,0,0.3)'); // Kenarlar flulaşır
-            grad.addColorStop(1, 'rgba(0,0,0,0)');   // Dışarısı tamamen karanlık
-
+            let grad = ctx.createRadialGradient(player.x, player.y, 60, player.x, player.y, player.vision);
+            grad.addColorStop(0, 'rgba(0,0,0,1)');
+            grad.addColorStop(0.8, 'rgba(0,0,0,0.3)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = grad;
             ctx.beginPath(); ctx.arc(player.x, player.y, player.vision, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
 
-            // Karanlığı en alta/arkaya bas (maskelenmeyen yerler için)
             ctx.globalCompositeOperation = 'destination-over';
             ctx.fillStyle = "black";
-            // Karanlığı tüm haritaya yay (zoom ile büyük görünecek)
             ctx.fillRect(0, 0, mapImg.width, mapImg.height);
-            
-            // Çizim modunu normale döndür
             ctx.globalCompositeOperation = 'source-over';
         }
 
