@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Office Sabotage - Fix</title>
+    <style>
+        body { background: #1a1a1a; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
+        canvas { background: #111; border: 2px solid #333; display: none; }
+        #error-msg { color: #ff4757; font-weight: bold; text-align: center; display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="status-text">Sistem Başlatılıyor...</div>
+    <div id="error-msg"></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const statusText = document.getElementById("status-text");
+        const errorMsg = document.getElementById("error-msg");
+
+        const mapImg = new Image();
+        mapImg.src = 'map.png'; // DOSYA ADI BURADA ÇOK ÖNEMLİ
+
+        mapImg.onload = function() {
+            statusText.style.display = "none";
+            canvas.style.display = "block";
+            canvas.width = mapImg.width;
+            canvas.height = mapImg.height;
+            console.log("Harita yüklendi: ", mapImg.width, "x", mapImg.height);
+            requestAnimationFrame(gameLoop);
+        };
+
+        mapImg.onerror = function() {
+            statusText.style.display = "none";
+            errorMsg.style.display = "block";
+            errorMsg.innerHTML = "HATA: 'map.png' bulunamadı!<br>Lütfen GitHub'a bu isimle bir resim yüklediğinden emin ol.";
+        };
+
+        let player = { x: 50, y: 50, radius: 15, color: "#e74c3c" };
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(mapImg, 0, 0);
+            
+            // Oyuncuyu çiz
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function gameLoop() {
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
