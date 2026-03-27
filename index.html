@@ -2,20 +2,21 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Mouse Control Pro</title>
+    <title>Office Sabotage - Hybrid Controls</title>
     <style>
         body { background: #000; color: white; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
         canvas { background: #111; border: 2px solid #333; cursor: crosshair; box-shadow: 0 0 40px rgba(0,0,0,1); }
-        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.7); padding: 12px; border-radius: 8px; font-size: 13px; z-index: 10; border: 1px solid #444; }
+        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; font-size: 13px; z-index: 10; border: 1px solid #444; line-height: 1.6; }
+        .highlight { color: #f1c40f; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <b>GÖRÜŞ:</b> Mouse'u Hareket Ettir<br>
-        <b>HAREKET:</b> Mouse Sol Tık (Basılı Tut)<br>
-        <hr style="border:0; border-top:1px solid #444; margin:8px 0;">
-        <span id="status">Bekliyor...</span>
+        <b>KONTROLLER</b><br>
+        Klavye: <span class="highlight">W-A-S-D</span><br>
+        Mouse: <span class="highlight">Sol Tık (Basılı Tut)</span><br>
+        Görüş: <span class="highlight">360° Çevresel</span>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -23,35 +24,34 @@
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-        const statusText = document.getElementById("status");
 
         const mapImg = new Image();
         mapImg.src = 'map.png';
 
-        let game = { 
-            zoom: 1.8, 
-            fov: 100 * (Math.PI / 180), // Görüş açısı genişliği
-            smoothness: 0.15 // Fenerin mouse'u takip hızı
-        };
+        let game = { zoom: 2.0 }; 
 
         let player = {
             x: 200, y: 400,
             radius: 12,
             color: '#c0392b',
             speed: 4,
-            angle: 0, // Fenerin baktığı açı
-            visionRadius: 320,
-            isMoving: false
+            angle: 0,
+            visionRadius: 260,
+            isMouseMoving: false
         };
 
         let camera = { x: 0, y: 0 };
+        let keys = {};
         let mouse = { x: 0, y: 0 };
 
-        // --- MOUSE OLAYLARI ---
-        window.addEventListener("mousedown", (e) => { if(e.button === 0) player.isMoving = true; });
-        window.addEventListener("mouseup", (e) => { if(e.button === 0) player.isMoving = false; });
+        // --- GİRDİ DİNLEYİCİLERİ ---
+        window.addEventListener("keydown", e => keys[e.code] = true);
+        window.addEventListener("keyup", e => keys[e.code] = false);
         
-        canvas.addEventListener("mousemove", (e) => {
+        canvas.addEventListener("mousedown", e => { if(e.button === 0) player.isMouseMoving = true; });
+        window.addEventListener("mouseup", e => { if(e.button === 0) player.isMouseMoving = false; });
+        
+        canvas.addEventListener("mousemove", e => {
             const rect = canvas.getBoundingClientRect();
             mouse.x = e.clientX - rect.left;
             mouse.y = e.clientY - rect.top;
@@ -60,38 +60,43 @@
         mapImg.onload = () => requestAnimationFrame(gameLoop);
 
         function update() {
-            // --- 1. FENER AÇISINI HESAPLA (DAİMA MOUSE'A BAKAR) ---
-            const screenPX = (player.x - camera.x) * game.zoom;
-            const screenPY = (player.y - camera.y) * game.zoom;
-            const targetAngle = Math.atan2(mouse.y - screenPY, mouse.x - screenPX);
+            let moveX = 0;
+            let moveY = 0;
 
-            // Yumuşak dönüş (Smoothing)
-            let diff = targetAngle - player.angle;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            player.angle += diff * game.smoothness;
+            // 1. KLAVYE KONTROLÜ (W-A-S-D)
+            if (keys["KeyW"] || keys["ArrowUp"]) moveY -= 1;
+            if (keys["KeyS"] || keys["ArrowDown"]) moveY += 1;
+            if (keys["KeyA"] || keys["ArrowLeft"]) moveX -= 1;
+            if (keys["KeyD"] || keys["ArrowRight"]) moveX += 1;
 
-            // --- 2. HAREKET (SOL TIK BASILIYSA MOUSE'A DOĞRU GİT) ---
-            if (player.isMoving) {
-                // Karakterin mevcut konumundan mouse'un haritadaki konumuna olan açı
-                // (Fener açısıyla aynı olabilir ama fener yumuşatılmış olduğu için bağımsız hesaplıyoruz)
-                const moveAngle = targetAngle; 
+            // 2. MOUSE KONTROLÜ (Eğer klavye kullanılmıyorsa ve tıklandıysa)
+            if (moveX === 0 && moveY === 0 && player.isMouseMoving) {
+                const worldMouseX = (mouse.x / game.zoom + camera.x);
+                const worldMouseY = (mouse.y / game.zoom + camera.y);
                 
-                // Mouse ile karakter arasındaki mesafeyi kontrol et (Dibine gelince titremesin)
-                const dx = (mouse.x / game.zoom + camera.x) - player.x;
-                const dy = (mouse.y / game.zoom + camera.y) - player.y;
+                const dx = worldMouseX - player.x;
+                const dy = worldMouseY - player.y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
 
-                if (dist > 10) {
-                    player.x += Math.cos(moveAngle) * player.speed;
-                    player.y += Math.sin(moveAngle) * player.speed;
-                    statusText.innerText = "Yürüyor...";
+                if (dist > 5) {
+                    const angle = Math.atan2(dy, dx);
+                    moveX = Math.cos(angle);
+                    moveY = Math.sin(angle);
                 }
-            } else {
-                statusText.innerText = "Etrafa Bakıyor...";
             }
 
-            // --- 3. KAMERA TAKİBİ ---
+            // Hareketi uygula
+            if (moveX !== 0 || moveY !== 0) {
+                // Çapraz hız sabitleme (Normalizasyon)
+                const length = Math.sqrt(moveX * moveX + moveY * moveY);
+                player.x += (moveX / length) * player.speed;
+                player.y += (moveY / length) * player.speed;
+                
+                // Bakış açısını yürüdüğü yöne çevir
+                player.angle = Math.atan2(moveY, moveX);
+            }
+
+            // Kamera Takibi
             camera.x = player.x - (canvas.width / 2) / game.zoom;
             camera.y = player.y - (canvas.height / 2) / game.zoom;
         }
@@ -108,8 +113,8 @@
             // 2. Oyuncu
             drawPlayer();
 
-            // 3. Dinamik Fener (Görüş Alanı)
-            applyLineOfSight();
+            // 3. Among Us Görüşü
+            applyVision();
 
             ctx.restore();
         }
@@ -117,34 +122,35 @@
         function drawPlayer() {
             ctx.save();
             ctx.translate(player.x, player.y);
-            ctx.rotate(player.angle); // Karakter fenerin baktığı yöne döner
+            ctx.rotate(player.angle); 
             
+            // Gövde
             ctx.fillStyle = player.color;
             ctx.beginPath(); ctx.arc(0, 0, player.radius, 0, Math.PI * 2); ctx.fill();
-            ctx.fillRect(-player.radius - 4, -5, 6, 10); // Çanta
-            
+            // Çanta
+            ctx.fillRect(-player.radius - 4, -5, 6, 10);
+            // Gözlük
             ctx.fillStyle = "#add8e6";
-            ctx.fillRect(4, -5, 8, 6); // Gözlük
+            ctx.fillRect(4, -5, 8, 6);
             ctx.restore();
         }
 
-        function applyLineOfSight() {
+        function applyVision() {
             ctx.save();
             ctx.globalCompositeOperation = 'destination-in';
 
-            const startAngle = player.angle - game.fov / 2;
-            const endAngle = player.angle + game.fov / 2;
-
-            let grad = ctx.createRadialGradient(player.x, player.y, 30, player.x, player.y, player.visionRadius);
-            grad.addColorStop(0, 'rgba(0,0,0,1)');
-            grad.addColorStop(0.8, 'rgba(0,0,0,0.2)');
-            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            let grad = ctx.createRadialGradient(
+                player.x, player.y, 40,           
+                player.x, player.y, player.visionRadius 
+            );
+            
+            grad.addColorStop(0, 'rgba(0,0,0,1)');   
+            grad.addColorStop(0.7, 'rgba(0,0,0,0.4)'); 
+            grad.addColorStop(1, 'rgba(0,0,0,0)');   
 
             ctx.fillStyle = grad;
             ctx.beginPath();
-            ctx.moveTo(player.x, player.y);
-            ctx.arc(player.x, player.y, player.visionRadius, startAngle, endAngle);
-            ctx.closePath();
+            ctx.arc(player.x, player.y, player.visionRadius, 0, Math.PI * 2);
             ctx.fill();
             
             ctx.restore();
