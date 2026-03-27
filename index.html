@@ -2,18 +2,20 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Click to Move</title>
+    <title>Office Sabotage - Mouse Control Pro</title>
     <style>
         body { background: #000; color: white; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-        canvas { background: #111; border: 2px solid #333; cursor: crosshair; }
-        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; font-size: 13px; z-index: 10; }
+        canvas { background: #111; border: 2px solid #333; cursor: crosshair; box-shadow: 0 0 40px rgba(0,0,0,1); }
+        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.7); padding: 12px; border-radius: 8px; font-size: 13px; z-index: 10; border: 1px solid #444; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        HAREKET: <span style="color:#f1c40f">Fare Sol Tık (Hedef Belirle)</span><br>
-        DURUM: <span id="status">Bekliyor</span>
+        <b>GÖRÜŞ:</b> Mouse'u Hareket Ettir<br>
+        <b>HAREKET:</b> Mouse Sol Tık (Basılı Tut)<br>
+        <hr style="border:0; border-top:1px solid #444; margin:8px 0;">
+        <span id="status">Bekliyor...</span>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -26,54 +28,70 @@
         const mapImg = new Image();
         mapImg.src = 'map.png';
 
-        let game = { zoom: 1.8, fov: 100 * (Math.PI / 180) };
+        let game = { 
+            zoom: 1.8, 
+            fov: 100 * (Math.PI / 180), // Görüş açısı genişliği
+            smoothness: 0.15 // Fenerin mouse'u takip hızı
+        };
 
         let player = {
             x: 200, y: 400,
             radius: 12,
             color: '#c0392b',
             speed: 4,
-            angle: 0,
+            angle: 0, // Fenerin baktığı açı
             visionRadius: 320,
-            target: null // Gidilecek hedef noktası {x, y}
+            isMoving: false
         };
 
         let camera = { x: 0, y: 0 };
+        let mouse = { x: 0, y: 0 };
 
-        // --- TIKLAMA OLAYI ---
-        canvas.addEventListener("mousedown", (e) => {
+        // --- MOUSE OLAYLARI ---
+        window.addEventListener("mousedown", (e) => { if(e.button === 0) player.isMoving = true; });
+        window.addEventListener("mouseup", (e) => { if(e.button === 0) player.isMoving = false; });
+        
+        canvas.addEventListener("mousemove", (e) => {
             const rect = canvas.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const clickY = e.clientY - rect.top;
-
-            // Tıklanan yerin haritadaki gerçek koordinatını hesapla (Zoom ve Kamera dahil)
-            player.target = {
-                x: (clickX / game.zoom) + camera.x,
-                y: (clickY / game.zoom) + camera.y
-            };
-            statusText.innerText = "Yürüyor...";
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
         });
 
         mapImg.onload = () => requestAnimationFrame(gameLoop);
 
         function update() {
-            if (player.target) {
-                // Hedefe olan mesafe ve açı
-                const dx = player.target.x - player.x;
-                const dy = player.target.y - player.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+            // --- 1. FENER AÇISINI HESAPLA (DAİMA MOUSE'A BAKAR) ---
+            const screenPX = (player.x - camera.x) * game.zoom;
+            const screenPY = (player.y - camera.y) * game.zoom;
+            const targetAngle = Math.atan2(mouse.y - screenPY, mouse.x - screenPX);
 
-                if (distance > 5) { // Hedefe çok yakın değilse yürü
-                    player.angle = Math.atan2(dy, dx);
-                    player.x += Math.cos(player.angle) * player.speed;
-                    player.y += Math.sin(player.angle) * player.speed;
-                } else {
-                    player.target = null; // Hedefe varıldı
-                    statusText.innerText = "Bekliyor";
+            // Yumuşak dönüş (Smoothing)
+            let diff = targetAngle - player.angle;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            player.angle += diff * game.smoothness;
+
+            // --- 2. HAREKET (SOL TIK BASILIYSA MOUSE'A DOĞRU GİT) ---
+            if (player.isMoving) {
+                // Karakterin mevcut konumundan mouse'un haritadaki konumuna olan açı
+                // (Fener açısıyla aynı olabilir ama fener yumuşatılmış olduğu için bağımsız hesaplıyoruz)
+                const moveAngle = targetAngle; 
+                
+                // Mouse ile karakter arasındaki mesafeyi kontrol et (Dibine gelince titremesin)
+                const dx = (mouse.x / game.zoom + camera.x) - player.x;
+                const dy = (mouse.y / game.zoom + camera.y) - player.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                if (dist > 10) {
+                    player.x += Math.cos(moveAngle) * player.speed;
+                    player.y += Math.sin(moveAngle) * player.speed;
+                    statusText.innerText = "Yürüyor...";
                 }
+            } else {
+                statusText.innerText = "Etrafa Bakıyor...";
             }
 
-            // Kamera Takibi
+            // --- 3. KAMERA TAKİBİ ---
             camera.x = player.x - (canvas.width / 2) / game.zoom;
             camera.y = player.y - (canvas.height / 2) / game.zoom;
         }
@@ -87,18 +105,10 @@
             // 1. Harita
             ctx.drawImage(mapImg, 0, 0);
 
-            // 2. Hedef İşaretçisi (Opsiyonel)
-            if (player.target) {
-                ctx.strokeStyle = "rgba(241, 196, 15, 0.5)";
-                ctx.beginPath();
-                ctx.arc(player.target.x, player.target.y, 5, 0, Math.PI*2);
-                ctx.stroke();
-            }
-
-            // 3. Oyuncu
+            // 2. Oyuncu
             drawPlayer();
 
-            // 4. Fener (Görüş Alanı)
+            // 3. Dinamik Fener (Görüş Alanı)
             applyLineOfSight();
 
             ctx.restore();
@@ -107,7 +117,7 @@
         function drawPlayer() {
             ctx.save();
             ctx.translate(player.x, player.y);
-            ctx.rotate(player.angle);
+            ctx.rotate(player.angle); // Karakter fenerin baktığı yöne döner
             
             ctx.fillStyle = player.color;
             ctx.beginPath(); ctx.arc(0, 0, player.radius, 0, Math.PI * 2); ctx.fill();
