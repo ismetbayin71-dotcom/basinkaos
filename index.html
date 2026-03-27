@@ -2,57 +2,147 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Fix</title>
+    <title>Office Sabotage - Camera Follow</title>
     <style>
-        body { background: #1a1a1a; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-        canvas { background: #111; border: 2px solid #333; display: none; }
-        #error-msg { color: #ff4757; font-weight: bold; text-align: center; display: none; }
+        body { background: #000; color: white; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
+        canvas { background: #111; border: 2px solid #333; }
+        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; font-size: 14px; z-index: 10; }
     </style>
 </head>
 <body>
 
-    <div id="status-text">Sistem Başlatılıyor...</div>
-    <div id="error-msg"></div>
-    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        Kontroller: W-A-S-D<br>
+        Kamera: Karakter Takibi Aktif
+    </div>
+    
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-        const statusText = document.getElementById("status-text");
-        const errorMsg = document.getElementById("error-msg");
 
         const mapImg = new Image();
-        mapImg.src = 'map.png'; // DOSYA ADI BURADA ÇOK ÖNEMLİ
+        mapImg.src = 'map.png';
+
+        // --- OYUNCU VE KAMERA AYARLARI ---
+        let player = {
+            x: 600, // Haritadaki gerçek konumu
+            y: 400, 
+            radius: 15, 
+            color: '#c0392b', 
+            speed: 5,
+            visionRadius: 250
+        };
+
+        // Kamera objesi (Ekranın merkezini takip eder)
+        let camera = {
+            x: 0,
+            y: 0,
+            width: canvas.width,
+            height: canvas.height
+        };
+
+        let keys = {};
 
         mapImg.onload = function() {
-            statusText.style.display = "none";
-            canvas.style.display = "block";
-            canvas.width = mapImg.width;
-            canvas.height = mapImg.height;
-            console.log("Harita yüklendi: ", mapImg.width, "x", mapImg.height);
             requestAnimationFrame(gameLoop);
         };
 
-        mapImg.onerror = function() {
-            statusText.style.display = "none";
-            errorMsg.style.display = "block";
-            errorMsg.innerHTML = "HATA: 'map.png' bulunamadı!<br>Lütfen GitHub'a bu isimle bir resim yüklediğinden emin ol.";
-        };
+        window.addEventListener("keydown", e => keys[e.code] = true);
+        window.addEventListener("keyup", e => keys[e.code] = false);
 
-        let player = { x: 50, y: 50, radius: 15, color: "#e74c3c" };
+        function update() {
+            // Hareket Mantığı
+            if (keys["KeyW"] || keys["ArrowUp"]) player.y -= player.speed;
+            if (keys["KeyS"] || keys["ArrowDown"]) player.y += player.speed;
+            if (keys["KeyA"] || keys["ArrowLeft"]) player.x -= player.speed;
+            if (keys["KeyD"] || keys["ArrowRight"]) player.x += player.speed;
+
+            // --- KAMERA TAKİBİ HESAPLAMA ---
+            // Kameranın sol üst köşesini, oyuncu ekranın tam ortasına gelecek şekilde ayarla
+            camera.x = player.x - canvas.width / 2;
+            camera.y = player.y - canvas.height / 2;
+
+            // Kameranın harita sınırlarından dışarı çıkmasını engelle (İsteğe bağlı)
+            if (camera.x < 0) camera.x = 0;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.x > mapImg.width - canvas.width) camera.x = mapImg.width - canvas.width;
+            if (camera.y > mapImg.height - canvas.height) camera.y = mapImg.height - canvas.height;
+        }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Kamerayı "kaydırarak" her şeyi çizmeye başla
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
+
+            // 1. Haritayı çiz
             ctx.drawImage(mapImg, 0, 0);
+
+            // 2. Karakteri çiz
+            drawPlayer();
+
+            // 3. FOG OF WAR (Sadece görüş alanını bırak)
+            applyFogOfWar();
+
+            ctx.restore(); // Kaydırmayı bitir
+        }
+
+        function drawPlayer() {
+            ctx.save();
+            ctx.translate(player.x, player.y);
             
-            // Oyuncuyu çiz
+            // Gövde
             ctx.fillStyle = player.color;
             ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
             ctx.fill();
+            
+            // Çanta
+            ctx.fillRect(-player.radius - 5, -5, 6, 15);
+            
+            // Gözlük (Among Us stili)
+            ctx.fillStyle = "#add8e6";
+            ctx.fillRect(2, -7, 12, 8);
+            
+            ctx.restore();
+        }
+
+        function applyFogOfWar() {
+            ctx.save();
+            // Maskeleme moduna geç
+            ctx.globalCompositeOperation = 'destination-in';
+
+            // Işık hüzmesi (Karakterin gerçek harita konumuna göre)
+            let gradient = ctx.createRadialGradient(
+                player.x, player.y, 50,           
+                player.x, player.y, player.visionRadius 
+            );
+            
+            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');   
+            gradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.4)'); 
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');   
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.visionRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+
+            // Sadece aydınlanmayan yerlere siyah bas
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.fillStyle = "black";
+            // Karanlığı tüm haritaya yay
+            ctx.fillRect(0, 0, mapImg.width, mapImg.height);
+            
+            ctx.globalCompositeOperation = 'source-over';
         }
 
         function gameLoop() {
+            update();
             draw();
             requestAnimationFrame(gameLoop);
         }
