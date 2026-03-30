@@ -2,27 +2,24 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Kill Button</title>
+    <title>Office Sabotage - Fixed Hitbox</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
         #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; }
-        
-        /* ÖLDÜR BUTONU TASARIMI */
         #killBtn {
             position: absolute; bottom: 40px; right: 40px;
             width: 90px; height: 90px;
-            background: rgba(255, 0, 0, 0.2); /* Varsayılan: Yarı saydam sönük kırmızı */
+            background: rgba(255, 0, 0, 0.2);
             border: 4px solid rgba(255, 255, 255, 0.1);
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             color: rgba(255, 255, 255, 0.3);
-            font-family: 'Gilroy Extra Bold', sans-serif; /* Senin sevdiğin font */
+            font-family: sans-serif;
             font-size: 16px; font-weight: bold;
-            transition: all 0.2s; /* Geçiş animasyonu */
+            transition: all 0.2s;
             user-select: none;
         }
-        /* Kurbana yaklaştığında aktifleşecek stil */
         #killBtn.active {
             background: rgba(255, 0, 0, 0.9);
             border: 4px solid #fff;
@@ -36,7 +33,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Hareket: WASD | Öldür: F</small>
+        <small>Hitbox Yükseltildi (Masa İçine Giriş Engellendi)</small>
     </div>
 
     <div id="killBtn">ÖLDÜR</div>
@@ -58,7 +55,7 @@
 
         let player = {
             x: 480, y: 350,
-            width: 65, height: 91, // 1.3x
+            width: 65, height: 91,
             speed: 4,
             visionRadius: 350,
             isMoving: false,
@@ -67,11 +64,7 @@
             killTimer: 0
         };
 
-        let victim = {
-            x: 580, y: 450,
-            width: 65, height: 91,
-            alive: true
-        };
+        let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
 
         let camera = { x: 0, y: 0 };
         let keys = {};
@@ -120,27 +113,34 @@
                 const angle = Math.atan2(dy, dx);
                 const vx = Math.cos(angle) * player.speed;
                 const vy = Math.sin(angle) * player.speed;
-                const fw = 18; const fh = 4;
 
-                if (!isWall(player.x + vx - fw, player.y) && !isWall(player.x + vx + fw, player.y)) player.x += vx;
-                if (!isWall(player.x, player.y + vy - fh) && !isWall(player.x, player.y + vy + fh)) player.y += vy;
+                // --- HITBOX GÜNCELLEMESİ ---
+                const fw = 18; // Ayak genişliği (sağ-sol)
+                const fh_up = 15; // Hitbox'ı YUKARIYA doğru 15 piksel yükselttik (Gövde koruması)
+                const fh_down = 5; // Ayak ucu payı
+
+                // X Kontrolü (Gövde yüksekliğini de hesaba katarak kontrol eder)
+                if (!isWall(player.x + vx - fw, player.y - fh_up) && 
+                    !isWall(player.x + vx + fw, player.y - fh_up) &&
+                    !isWall(player.x + vx, player.y + fh_down)) {
+                    player.x += vx;
+                }
+
+                // Y Kontrolü
+                if (!isWall(player.x - fw, player.y + vy - fh_up) && 
+                    !isWall(player.x + fw, player.y + vy - fh_up) &&
+                    !isWall(player.x, player.y + vy + fh_down)) {
+                    player.y += vy;
+                }
                 
                 player.walkStep += 0.15;
             } else { player.walkStep = 0; }
 
-            // MESAFE KONTROLÜ VE BUTON PARLAMASI
             const distSq = Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2);
-            const killRangeSq = Math.pow(80, 2); // 80 piksel mesafe
-
-            if (victim.alive && distSq < killRangeSq) {
-                killBtnUI.classList.add("active"); // Butonu parlat
-                if (keys["KeyF"]) {
-                    player.killTimer = 100;
-                    player.facingRight = (victim.x > player.x);
-                }
-            } else {
-                killBtnUI.classList.remove("active"); // Butonu söndür
-            }
+            if (victim.alive && distSq < Math.pow(80, 2)) {
+                killBtnUI.classList.add("active");
+                if (keys["KeyF"]) { player.killTimer = 100; player.facingRight = (victim.x > player.x); }
+            } else { killBtnUI.classList.remove("active"); }
 
             camera.x = player.x - canvas.width / 2;
             camera.y = player.y - canvas.height / 2;
@@ -149,7 +149,6 @@
         function draw() {
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
 
