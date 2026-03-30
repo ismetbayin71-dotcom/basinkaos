@@ -2,22 +2,21 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Peter Edition</title>
+    <title>Office Sabotage - Peter 2X & Fog</title>
     <style>
-        body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: 'Segoe UI', sans-serif; }
-        canvas { background: #111; border: 3px solid #444; cursor: crosshair; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        #ui { position: absolute; top: 20px; left: 20px; pointer-events: none; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 8px; border: 1px solid #555; color: white; min-width: 200px; }
-        .status { font-weight: bold; padding: 2px 10px; border-radius: 4px; text-transform: uppercase; font-size: 12px; }
+        body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
+        canvas { background: #000; border: 2px solid #333; cursor: crosshair; }
+        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 10px; border: 1px solid #444; color: white; min-width: 180px; z-index: 10; }
+        .status { font-weight: bold; padding: 2px 8px; border-radius: 4px; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <b style="color: #e74c3c; font-size: 18px;">OFFICE SABOTAGE</b><br>
-        <span style="font-size: 13px; color: #aaa;">Sistem Durumu:</span> 
-        <span id="phys-status" class="status" style="background: #c0392b;">Yükleniyor...</span><br>
+        <b>OFFICE SABOTAGE</b><br>
+        Görüş: <span class="status" style="background: #2980b9;">SINIRLI</span><br>
         <hr style="border:0; border-top:1px solid #444; margin:10px 0;">
-        <small style="color: #888;">W-A-S-D: Hareket<br>Karakter: Sabotajcı Peter</small>
+        <small>W-A-S-D: Hareket<br>Peter Boyutu: 2X</small>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -25,25 +24,18 @@
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-        const physStatus = document.getElementById("phys-status");
 
-        // GÖRSELLER (GitHub'daki isimlerle birebir aynı olmalı)
-        const mapImg = new Image(); 
-        mapImg.src = 'map.png'; // map.jpg olan hata düzeltildi
-
-        const collImg = new Image(); 
-        collImg.src = 'collision.png';
-
-        const charIdle = new Image(); 
-        charIdle.src = 'character.png';
-
-        const charWalk = new Image(); 
-        charWalk.src = 'character_walk_1.png';
+        // GÖRSELLER
+        const mapImg = new Image(); mapImg.src = 'map.png'; // GitHub'daki yeni adıyla
+        const collImg = new Image(); collImg.src = 'collision.png';
+        const charIdle = new Image(); charIdle.src = 'character.png';
+        const charWalk = new Image(); charWalk.src = 'character_walk_1.png';
 
         let player = {
-            x: 450, y: 300, // Merdiven yanı başlangıç
-            width: 55, height: 80, 
-            speed: 3.8,
+            x: 450, y: 300,
+            width: 110, height: 160, // 2X Boyut (Eski: 55x80)
+            speed: 4,
+            visionRadius: 250, // Görüş alanı büyüklüğü
             isMoving: false,
             facingRight: true,
             animTimer: 0
@@ -52,27 +44,16 @@
         let camera = { x: 0, y: 0 };
         let keys = {};
         let collisionCtx = null;
-        let imagesLoaded = 0;
+        let loadedCount = 0;
 
-        // Dosya yükleme kontrolü ve hata ayıklama
         function checkLoad() {
-            imagesLoaded++;
-            if(imagesLoaded === 4) {
+            loadedCount++;
+            if(loadedCount === 4) {
                 initCollision();
-                physStatus.innerText = "AKTİF";
-                physStatus.style.background = "#27ae60";
                 requestAnimationFrame(gameLoop);
             }
         }
-
-        const images = [mapImg, collImg, charIdle, charWalk];
-        images.forEach(img => {
-            img.onload = checkLoad;
-            img.onerror = () => {
-                physStatus.innerText = "HATA: " + img.src.split('/').pop();
-                console.error("Yüklenemedi: " + img.src);
-            };
-        });
+        [mapImg, collImg, charIdle, charWalk].forEach(img => img.onload = checkLoad);
 
         function initCollision() {
             const tempCanvas = document.createElement('canvas');
@@ -82,22 +63,18 @@
             collisionCtx.drawImage(collImg, 0, 0);
         }
 
-        // --- ÇARPIŞMA SİSTEMİ (KIRMIZI MASKE) ---
         function canMoveTo(nx, ny) {
             if (!collisionCtx) return true;
-            
-            // Ayak ucu noktaları (Sadece yere basılan yerleri kontrol eder)
+            // Ayak ucu noktaları (2X boyuta göre genişletildi)
             const checkPoints = [
                 {x: nx, y: ny},
-                {x: nx - 12, y: ny},
-                {x: nx + 12, y: ny}
+                {x: nx - 25, y: ny},
+                {x: nx + 25, y: ny}
             ];
-
             for (let p of checkPoints) {
                 if (p.x < 0 || p.x > collImg.width || p.y < 0 || p.y > collImg.height) return false;
                 const pixel = collisionCtx.getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data;
-                // Saf Kırmızı (R > 150) kontrolü
-                if (pixel[3] > 0 && pixel[0] > 150 && pixel[1] < 100) return false;
+                if (pixel[3] > 0 && pixel[0] > 150) return false;
             }
             return true;
         }
@@ -107,10 +84,10 @@
 
         function update() {
             let dx = 0, dy = 0;
-            if (keys["KeyW"] || keys["ArrowUp"]) dy -= 1;
-            if (keys["KeyS"] || keys["ArrowDown"]) dy += 1;
-            if (keys["KeyA"] || keys["ArrowLeft"]) { dx -= 1; player.facingRight = false; }
-            if (keys["KeyD"] || keys["ArrowRight"]) { dx += 1; player.facingRight = true; }
+            if (keys["KeyW"]) dy -= 1;
+            if (keys["KeyS"]) dy += 1;
+            if (keys["KeyA"]) { dx -= 1; player.facingRight = false; }
+            if (keys["KeyD"]) { dx += 1; player.facingRight = true; }
 
             player.isMoving = (dx !== 0 || dy !== 0);
 
@@ -118,41 +95,62 @@
                 const angle = Math.atan2(dy, dx);
                 const nextX = player.x + Math.cos(angle) * player.speed;
                 const nextY = player.y + Math.sin(angle) * player.speed;
-
                 if (canMoveTo(nextX, player.y)) player.x = nextX;
                 if (canMoveTo(player.x, nextY)) player.y = nextY;
-                
-                player.animTimer += 0.15; // Yürüme hızı
-            } else {
-                player.animTimer = 0;
-            }
+                player.animTimer += 0.15;
+            } else { player.animTimer = 0; }
 
-            // Kamera takibi
             camera.x = player.x - canvas.width / 2;
             camera.y = player.y - canvas.height / 2;
         }
 
         function draw() {
+            // 1. Temizle
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Haritayı çiz (Kamera takip eder)
             ctx.save();
             ctx.translate(-camera.x, -camera.y);
-
-            // 1. Harita
             ctx.drawImage(mapImg, 0, 0);
-
-            // 2. Peter (Karakter) Çizimi
-            const currentImg = (player.isMoving && Math.floor(player.animTimer) % 2 === 0) ? charWalk : charIdle;
-            
-            ctx.save();
-            ctx.translate(player.x, player.y);
-            
-            // Sola dönerken karakteri aynala
-            if (!player.facingRight) ctx.scale(-1, 1);
-
-            // Karakteri ayak merkezli çizmek için offset veriyoruz
-            ctx.drawImage(currentImg, -player.width/2, -player.height + 5, player.width, player.height);
             ctx.restore();
 
+            // 3. SAVAŞ SİSİ (Fog of War) - Işık deliği açma
+            drawFog();
+
+            // 4. Karakter (En üstte ve ışığın merkezinde)
+            drawPlayer();
+        }
+
+        function drawFog() {
+            ctx.save();
+            // Tüm ekranı karart
+            ctx.fillStyle = "rgba(0, 0, 0, 0.92)"; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Oyuncunun olduğu yerde "delik" aç
+            ctx.globalCompositeOperation = 'destination-out';
+            
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2 - 40; // Peter'ın gövde merkezi hizası
+            
+            const grad = ctx.createRadialGradient(centerX, centerY, 50, centerX, centerY, player.visionRadius);
+            grad.addColorStop(0, "rgba(255, 255, 255, 1)"); // Merkez tam aydınlık
+            grad.addColorStop(1, "rgba(255, 255, 255, 0)"); // Kenarlar karanlık
+            
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, player.visionRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawPlayer() {
+            const currentImg = (player.isMoving && Math.floor(player.animTimer) % 2 === 0) ? charWalk : charIdle;
+            ctx.save();
+            // Karakter her zaman ekranın ortasında (Kamera onu takip ediyor)
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            if (!player.facingRight) ctx.scale(-1, 1);
+            ctx.drawImage(currentImg, -player.width/2, -player.height + 10, player.width, player.height);
             ctx.restore();
         }
 
