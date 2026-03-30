@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Peter Mini</title>
+    <title>Office Sabotage - Peter 1.3x</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; }
@@ -13,7 +13,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Boyut: 0.5x | Durum: Yere Sabit</small>
+        <small>Ölçek: 1.3x | Animasyon: Mesafe Odaklı</small>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -29,10 +29,10 @@
 
         let player = {
             x: 480, y: 350,
-            // Boyutlar yarıya indirildi
-            width: 50, height: 70, 
-            speed: 3.8,
-            visionRadius: 320,
+            // 1.3x ölçeklenmiş boyutlar
+            width: 65, height: 91, 
+            speed: 4,
+            visionRadius: 340,
             isMoving: false,
             facingRight: true,
             walkStep: 0
@@ -60,7 +60,6 @@
             if (!collisionCtx) return false;
             if (x < 0 || x >= collImg.width || y < 0 || y >= collImg.height) return true;
             const p = collisionCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            // Kırmızı maske kontrolü
             return (p[0] > 150 && p[1] < 100);
         }
 
@@ -81,8 +80,8 @@
                 const nextX = player.x + Math.cos(angle) * player.speed;
                 const nextY = player.y + Math.sin(angle) * player.speed;
 
-                // Küçük Peter için daha dar collision (çarpışma) alanı
-                const fw = 12; 
+                // 1.3x boyuta uygun ayak genişliği
+                const fw = 18; 
                 if (!isWall(nextX, player.y) && !isWall(nextX - fw, player.y) && !isWall(nextX + fw, player.y)) {
                     player.x = nextX;
                 }
@@ -106,7 +105,7 @@
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
 
-            // 1. HARİTA VE SIS
+            // 1. HARİTA VE YUMUŞAK SIS
             ctx.save();
             ctx.beginPath();
             ctx.arc(cx, cy, player.visionRadius, 0, Math.PI * 2);
@@ -115,7 +114,7 @@
             ctx.drawImage(mapImg, 0, 0);
             ctx.restore();
 
-            const grad = ctx.createRadialGradient(cx, cy, player.visionRadius * 0.5, cx, cy, player.visionRadius);
+            const grad = ctx.createRadialGradient(cx, cy, player.visionRadius * 0.45, cx, cy, player.visionRadius);
             grad.addColorStop(0, "rgba(0,0,0,0)");
             grad.addColorStop(1, "rgba(0,0,0,1)");
             ctx.fillStyle = grad;
@@ -126,16 +125,15 @@
 
             ctx.save();
             ctx.translate(cx, cy); 
-            
             if (!player.facingRight) ctx.scale(-1, 1);
             
-            // GÖLGE: Peter küçüldüğü için gölgeyi de küçülttüm
+            // GÖLGE
             ctx.fillStyle = "rgba(0,0,0,0.5)";
             ctx.beginPath();
-            ctx.ellipse(0, 0, 20, 6, 0, 0, Math.PI * 2);
+            ctx.ellipse(0, 0, 26, 8, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // PETER: Ayakları tam (0,0) noktasına gelecek şekilde çiziliyor
+            // PETER: Ayaklar tam zemine (0,0) basıyor
             ctx.drawImage(img, -player.width/2, -player.height, player.width, player.height);
             
             ctx.restore();
