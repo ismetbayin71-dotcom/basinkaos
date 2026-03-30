@@ -2,174 +2,149 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Pro Collision</title>
+    <title>Office Sabotage - High Performance Edition</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
-        canvas { background: #000; border: 2px solid #333; cursor: none; }
+        canvas { background: #000; border: 2px solid #333; cursor: none; image-rendering: pixelated; }
         #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; }
-        .game-btn { position: absolute; bottom: 40px; width: 95px; height: 95px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Arial Black', sans-serif; font-size: 12px; font-weight: bold; transition: all 0.2s ease; user-select: none; border: 4px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.2); text-align: center; }
-        #killBtn { right: 40px; background: rgba(255, 0, 0, 0.1); }
-        #killBtn.active { background: rgba(220, 0, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 25px #ff0000; transform: scale(1.1); }
-        #sabotageBtn { right: 155px; background: rgba(255, 140, 0, 0.1); }
-        #sabotageBtn.active { background: rgba(255, 140, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 25px #ffa500; transform: scale(1.1); }
     </style>
 </head>
 <body>
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Kırmızı: Duvar (Görüşü Keser) | Yeşil: Masa (Geçilmez)</small>
+        <small>Performans Modu Aktif (Raycasting Optimize Edildi)</small>
     </div>
-
-    <div id="killBtn" class="game-btn">ÖLDÜR<br>(F)</div>
-    <div id="sabotageBtn" class="game-btn">SABOTE<br>(E)</div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-        const killBtnUI = document.getElementById("killBtn");
-        const sabBtnUI = document.getElementById("sabotageBtn");
+        const ctx = canvas.getContext("2d", { alpha: false }); // Performans için alpha kanalını kapattık
 
-        // GÖRSELLER
+        // Görseller
         const mapImg = new Image(); mapImg.src = 'map.png';
         const collImg = new Image(); collImg.src = 'collision.png';
         const charIdle = new Image(); charIdle.src = 'character.png';
         const charWalk = new Image(); charWalk.src = 'character_walk_1.png';
         const victimImg = new Image(); victimImg.src = 'victim.png';
-        const killImg1 = new Image(); killImg1.src = 'peter_kill_1.png';
-        const killImg2 = new Image(); killImg2.src = 'peter_kill_2.png';
 
-        let player = { x: 480, y: 350, width: 65, height: 91, speed: 4, visionRadius: 380, isMoving: false, facingRight: true, walkStep: 0, killTimer: 0 };
-        let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
-        let machines = [{ x: 809, y: 483, broken: false, particles: [] }];
+        let player = { x: 480, y: 350, width: 65, height: 91, speed: 4, visionRadius: 350, isMoving: false, facingRight: true };
         let camera = { x: 0, y: 0 };
         let keys = {};
-        let collisionCtx = null;
+        let collisionData = null; // Piksel verilerini burada saklayacağız
+        let collW = 0, collH = 0;
         let loaded = 0;
 
         function checkLoad() {
             loaded++;
-            if(loaded === 7) {
+            if(loaded === 5) {
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = collImg.width; tempCanvas.height = collImg.height;
-                collisionCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-                collisionCtx.drawImage(collImg, 0, 0);
+                const tCtx = tempCanvas.getContext('2d');
+                tCtx.drawImage(collImg, 0, 0);
+                collisionData = tCtx.getImageData(0, 0, collImg.width, collImg.height).data;
+                collW = collImg.width;
+                collH = collImg.height;
                 requestAnimationFrame(gameLoop);
             }
         }
-        [mapImg, collImg, charIdle, charWalk, victimImg, killImg1, killImg2].forEach(img => img.onload = checkLoad);
+        [mapImg, collImg, charIdle, charWalk, victimImg].forEach(img => img.onload = checkLoad);
 
-        // --- GELİŞMİŞ COLLISION KONTROLÜ ---
+        // HIZLI COLLISION (getImageData kullanmaz, hafızadaki diziden okur)
         function getCollisionType(x, y) {
-            if (!collisionCtx) return "none";
-            if (x < 0 || x >= collImg.width || y < 0 || y >= collImg.height) return "wall";
-            const p = collisionCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+            if (!collisionData) return 0;
+            const ix = Math.floor(x);
+            const iy = Math.floor(y);
+            if (ix < 0 || ix >= collW || iy < 0 || iy >= collH) return 1;
             
-            // Kırmızı Tonları (R > 150, G < 100) -> YÜKSEK DUVAR
-            if (p[0] > 150 && p[1] < 100 && p[2] < 100) return "wall";
-            
-            // Yeşil Tonları (G > 150, R < 100) -> ALÇAK OBJE (MASA)
-            if (p[1] > 150 && p[0] < 100) return "object";
-            
-            return "none";
+            const idx = (iy * collW + ix) * 4;
+            const r = collisionData[idx];
+            const g = collisionData[idx + 1];
+
+            if (r > 150 && g < 100) return 1; // Duvar (Kırmızı)
+            if (g > 150 && r < 100) return 2; // Masa (Yeşil)
+            return 0;
         }
 
         window.addEventListener("keydown", e => keys[e.code] = true);
         window.addEventListener("keyup", e => keys[e.code] = false);
 
         function update() {
-            if (player.killTimer > 0) { player.killTimer--; if (player.killTimer === 0) victim.alive = false; return; }
-
             let dx = 0, dy = 0;
             if (keys["KeyW"]) dy -= 1; if (keys["KeyS"]) dy += 1;
             if (keys["KeyA"]) { dx -= 1; player.facingRight = false; }
             if (keys["KeyD"]) { dx += 1; player.facingRight = true; }
 
             player.isMoving = (dx !== 0 || dy !== 0);
-
             if (player.isMoving) {
                 const angle = Math.atan2(dy, dx);
                 const vx = Math.cos(angle) * player.speed;
                 const vy = Math.sin(angle) * player.speed;
-                const fw = 15; // Çarpışma genişliği
 
-                // Hareket Kontrolü: Hem duvara hem yeşil objeye takılır
-                if (getCollisionType(player.x + vx - fw, player.y) === "none" && 
-                    getCollisionType(player.x + vx + fw, player.y) === "none") player.x += vx;
-                
-                if (getCollisionType(player.x, player.y + vy - 10) === "none" && 
-                    getCollisionType(player.x, player.y + vy + 5) === "none") player.y += vy;
-                
-                player.walkStep += 0.15;
+                // X ve Y ayrı (Sliding/Sürtünme için)
+                if (getCollisionType(player.x + vx, player.y) === 0) player.x += vx;
+                if (getCollisionType(player.x, player.y + vy) === 0) player.y += vy;
             }
-
-            // Sabotaj ve Partikül Mantığı
-            machines.forEach(m => {
-                let d = Math.sqrt(Math.pow(player.x - m.x, 2) + Math.pow(player.y - m.y, 2));
-                if (d < 100 && !m.broken && keys["KeyE"]) m.broken = true;
-                if (m.broken && Math.random() > 0.7) {
-                    m.particles.push({ x: m.x, y: m.y - 20, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6-2, life: 1, color: Math.random()>0.5?"#fc0":"#f60"});
-                }
-                m.particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.02; if (p.life <= 0) m.particles.splice(i, 1); });
-            });
-
             camera.x = player.x - canvas.width / 2;
             camera.y = player.y - canvas.height / 2;
         }
 
-        function drawVision() {
-            const cx = canvas.width / 2, cy = canvas.height / 2;
+        function draw() {
+            // Arka planı temizle
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            // --- OPTİMİZE RAYCASTING ---
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(cx, cy);
 
-            for (let i = 0; i <= 360; i += 1) {
-                const angle = (i * Math.PI) / 180;
-                let rx = player.x, ry = player.y;
-                for (let d = 0; d < player.visionRadius; d += 6) {
-                    rx += Math.cos(angle) * 6;
-                    ry += Math.sin(angle) * 6;
-                    // SADECE "wall" (kırmızı) olanlar görüşü keser! "object" (yeşil) olanlar kesmez.
-                    if (getCollisionType(rx, ry) === "wall") break;
+            const rayCount = 180; // 360 yerine 180 (Yeterli akıcılık sağlar)
+            for (let i = 0; i <= rayCount; i++) {
+                const angle = (i * (360 / rayCount) * Math.PI) / 180;
+                let rx = player.x;
+                let ry = player.y;
+                
+                // Işını daha büyük adımlarla fırlat (Performans)
+                for (let d = 0; d < player.visionRadius; d += 8) {
+                    rx += Math.cos(angle) * 8;
+                    ry += Math.sin(angle) * 8;
+                    if (getCollisionType(rx, ry) === 1) break; // Sadece kırmızı duvarda dur
                 }
                 ctx.lineTo(rx - camera.x, ry - camera.y);
             }
+            ctx.closePath();
             ctx.clip();
-            ctx.translate(-camera.x, -camera.y);
-            ctx.drawImage(mapImg, 0, 0);
-            
-            // Makineler ve Victim görüş içindeyse çizilir
-            machines.forEach(m => {
-                if (m.broken) {
-                    ctx.fillStyle = "rgba(100, 100, 100, 0.4)";
-                    for(let i=0; i<3; i++) { ctx.beginPath(); ctx.arc(m.x + Math.sin(Date.now()/200 + i)*15, m.y - 30 - (i*15), 15 + i*5, 0, Math.PI*2); ctx.fill(); }
-                    m.particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 3, 3); });
-                    ctx.globalAlpha = 1;
-                }
-            });
-            if (victim.alive) ctx.drawImage(victimImg, victim.x - victim.width/2, victim.y - victim.height, victim.width, victim.height);
+
+            // Görünür alanı çiz
+            ctx.drawImage(mapImg, -camera.x, -camera.y);
+            ctx.drawImage(victimImg, 580 - camera.x, 450 - camera.y, 65, 91);
             ctx.restore();
 
-            // Kenar Yumuşatma
-            const grad = ctx.createRadialGradient(cx, cy, 150, cx, cy, player.visionRadius);
-            grad.addColorStop(0, "rgba(0,0,0,0)"); grad.addColorStop(1, "rgba(0,0,0,0.7)");
-            ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
+            // Kenarları karart (Gradient)
+            const grad = ctx.createRadialGradient(cx, cy, 100, cx, cy, player.visionRadius);
+            grad.addColorStop(0, "rgba(0,0,0,0)");
+            grad.addColorStop(1, "rgba(0,0,0,0.8)");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        function draw() {
-            ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            drawVision();
-            const cx = canvas.width / 2, cy = canvas.height / 2;
-            let currentImg = (player.isMoving && Math.floor(player.walkStep) % 2 === 1) ? charWalk : charIdle;
-            if (player.killTimer > 0) currentImg = (player.killTimer > 50) ? killImg1 : killImg2;
-            ctx.save(); ctx.translate(cx, cy); if (!player.facingRight) ctx.scale(-1, 1);
-            ctx.drawImage(currentImg, -player.width/2, -player.height, player.width, player.height);
+            // Oyuncuyu çiz
+            ctx.save();
+            ctx.translate(cx, cy);
+            if (!player.facingRight) ctx.scale(-1, 1);
+            ctx.drawImage(player.isMoving ? charWalk : charIdle, -player.width/2, -player.height, player.width, player.height);
             ctx.restore();
         }
 
-        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
     </script>
 </body>
 </html>
