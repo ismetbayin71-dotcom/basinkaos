@@ -2,32 +2,32 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Machine Sabotage & Finder</title>
+    <title>Office Sabotage - Machine Master</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
         #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; }
         
         .game-btn {
-            position: absolute; bottom: 40px; width: 90px; height: 90px;
+            position: absolute; bottom: 40px; width: 95px; height: 95px;
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-family: sans-serif; font-size: 11px; font-weight: bold;
-            transition: all 0.2s; user-select: none; border: 4px solid rgba(255, 255, 255, 0.1);
+            font-family: 'Arial Black', sans-serif; font-size: 12px; font-weight: bold;
+            transition: all 0.2s ease-in-out; user-select: none; border: 4px solid rgba(255, 255, 255, 0.1);
             color: rgba(255, 255, 255, 0.2); text-align: center;
         }
 
         #killBtn { right: 40px; background: rgba(255, 0, 0, 0.1); }
-        #killBtn.active { background: rgba(255, 0, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 20px #ff0000; transform: scale(1.1); }
+        #killBtn.active { background: rgba(220, 0, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 25px #ff0000; transform: scale(1.1); }
 
-        #sabotageBtn { right: 150px; background: rgba(255, 165, 0, 0.1); }
-        #sabotageBtn.active { background: rgba(255, 165, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 20px #ffa500; transform: scale(1.1); }
+        #sabotageBtn { right: 155px; background: rgba(255, 165, 0, 0.1); }
+        #sabotageBtn.active { background: rgba(255, 140, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 25px #ffa500; transform: scale(1.1); }
     </style>
 </head>
 <body>
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>E: Sabote Et | F: Öldür | Sol Alt: Konum</small>
+        <small>Sabote: E | Öldür: F | Pay: 100px</small>
     </div>
 
     <div id="killBtn" class="game-btn">ÖLDÜR<br>(F)</div>
@@ -41,10 +41,9 @@
         const killBtnUI = document.getElementById("killBtn");
         const sabBtnUI = document.getElementById("sabotageBtn");
 
-        // SES AYARI
         const walkSound = new Audio('walk.mp3');
         walkSound.loop = true;
-        walkSound.volume = 0.03;
+        walkSound.volume = 0.03; // %3 Ultra kısık ses
 
         // GÖRSELLER
         const mapImg = new Image(); mapImg.src = 'map.png';
@@ -58,11 +57,10 @@
         let player = { x: 480, y: 350, width: 65, height: 91, speed: 4, visionRadius: 350, isMoving: false, facingRight: true, walkStep: 0, killTimer: 0 };
         let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
         
-        // --- MAKİNE KOORDİNATLARI ---
-        // Buradaki sayıları sol altta gördüğün rakamlarla değiştir!
+        // --- GÜNCEL MAKİNE KOORDİNATLARI ---
         let machines = [
-            { x: 320, y: 220, broken: false }, 
-            { x: 650, y: 280, broken: false }
+            { x: 809, y: 483, broken: false }, // Görselden aldığımız tam konum
+            { x: 250, y: 200, broken: false }  // İkinci makine (Tahmini, X/Y ile değiştirebilirsin)
         ];
 
         let camera = { x: 0, y: 0 };
@@ -112,18 +110,18 @@
                 player.walkStep += 0.15;
             } else { walkSound.pause(); walkSound.currentTime = 0; player.walkStep = 0; }
 
-            // KILL MESAFE
+            // KILL MESAFE (80px)
             const distToVictim = Math.sqrt(Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2));
             if (victim.alive && distToVictim < 80) {
                 killBtnUI.classList.add("active");
                 if (keys["KeyF"]) { player.killTimer = 100; player.facingRight = (victim.x > player.x); }
             } else { killBtnUI.classList.remove("active"); }
 
-            // SABOTAJ MESAFE
+            // SABOTAJ MESAFE (100px PAY)
             let nearMachine = false;
             machines.forEach(m => {
                 let d = Math.sqrt(Math.pow(player.x - m.x, 2) + Math.pow(player.y - m.y, 2));
-                if (d < 75 && !m.broken) {
+                if (d < 100 && !m.broken) { // 100 piksel pay burada
                     nearMachine = true;
                     if (keys["KeyE"]) m.broken = true;
                 }
@@ -142,13 +140,13 @@
             ctx.translate(-camera.x, -camera.y);
             ctx.drawImage(mapImg, 0, 0);
 
-            // SABOTAJ EFEKTİ (Duman/Kıvılcım)
+            // SABOTAJ EFEKTİ
             machines.forEach(m => {
                 if (m.broken) {
-                    ctx.fillStyle = "rgba(150, 150, 150, 0.7)";
-                    for(let i=0; i<4; i++) {
+                    ctx.fillStyle = "rgba(180, 180, 180, 0.6)";
+                    for(let i=0; i<5; i++) {
                         ctx.beginPath();
-                        ctx.arc(m.x + Math.sin(Date.now()/150 + i)*12, m.y - 30 - (i*12), 10 + i, 0, Math.PI*2);
+                        ctx.arc(m.x + Math.sin(Date.now()/120 + i)*15, m.y - 40 - (i*15), 12 + i, 0, Math.PI*2);
                         ctx.fill();
                     }
                 }
@@ -173,10 +171,10 @@
             ctx.drawImage(currentImg, -player.width/2, -player.height, player.width, player.height);
             ctx.restore();
 
-            // --- KOORDİNAT GÖSTERGESİ (BEYAZ YAZI) ---
+            // KONUM GÖSTERGESİ
             ctx.fillStyle = "white";
-            ctx.font = "bold 16px Arial";
-            ctx.fillText("📍 KONUMUN -> X: " + Math.floor(player.x) + " Y: " + Math.floor(player.y), 20, canvas.height - 20);
+            ctx.font = "bold 14px Arial";
+            ctx.fillText("📍 X: " + Math.floor(player.x) + " Y: " + Math.floor(player.y), 20, canvas.height - 20);
         }
 
         function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
