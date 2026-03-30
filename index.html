@@ -2,23 +2,14 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Smooth Sliding Edition</title>
+    <title>Office Sabotage - Line of Sight Edition</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
         #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; }
-        
-        .game-btn {
-            position: absolute; bottom: 40px; width: 95px; height: 95px;
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-family: 'Arial Black', sans-serif; font-size: 12px; font-weight: bold;
-            transition: all 0.2s ease; user-select: none; border: 4px solid rgba(255, 255, 255, 0.1);
-            color: rgba(255, 255, 255, 0.2); text-align: center;
-        }
-
+        .game-btn { position: absolute; bottom: 40px; width: 95px; height: 95px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Arial Black', sans-serif; font-size: 12px; font-weight: bold; transition: all 0.2s ease; user-select: none; border: 4px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.2); text-align: center; }
         #killBtn { right: 40px; background: rgba(255, 0, 0, 0.1); }
         #killBtn.active { background: rgba(220, 0, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 25px #ff0000; transform: scale(1.1); }
-
         #sabotageBtn { right: 155px; background: rgba(255, 140, 0, 0.1); }
         #sabotageBtn.active { background: rgba(255, 140, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 25px #ffa500; transform: scale(1.1); }
     </style>
@@ -27,7 +18,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Hareket: WASD (Duvar Sürtünmesi Aktif)</small>
+        <small>Görüş Sistemi: Duvarların arkası artık karanlık.</small>
     </div>
 
     <div id="killBtn" class="game-btn">ÖLDÜR<br>(F)</div>
@@ -45,7 +36,6 @@
         walkSound.loop = true;
         walkSound.volume = 0.03;
 
-        // GÖRSELLER
         const mapImg = new Image(); mapImg.src = 'map.png';
         const collImg = new Image(); collImg.src = 'collision.png';
         const charIdle = new Image(); charIdle.src = 'character.png';
@@ -56,12 +46,7 @@
 
         let player = { x: 480, y: 350, width: 65, height: 91, speed: 4, visionRadius: 350, isMoving: false, facingRight: true, walkStep: 0, killTimer: 0 };
         let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
-        
-        let machines = [
-            { x: 809, y: 483, broken: false, particles: [] },
-            { x: 250, y: 200, broken: false, particles: [] }
-        ];
-
+        let machines = [{ x: 809, y: 483, broken: false, particles: [] }, { x: 250, y: 200, broken: false, particles: [] }];
         let camera = { x: 0, y: 0 };
         let keys = {};
         let collisionCtx = null;
@@ -86,80 +71,46 @@
             return (p[0] > 150 && p[1] < 100);
         }
 
-        window.addEventListener("keydown", e => keys[e.code] = true);
-        window.addEventListener("keyup", e => keys[e.code] = false);
+        // --- RAYCASTING GÖRÜŞ ALANI FONKSİYONU ---
+        function drawVision() {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const rays = 120; // Işın sayısı (Performans için ideal)
+            const step = (Math.PI * 2) / rays;
 
-        function update() {
-            if (player.killTimer > 0) { player.killTimer--; if (player.killTimer === 0) victim.alive = false; walkSound.pause(); return; }
-
-            let dx = 0, dy = 0;
-            if (keys["KeyW"]) dy -= 1; if (keys["KeyS"]) dy += 1;
-            if (keys["KeyA"]) { dx -= 1; player.facingRight = false; }
-            if (keys["KeyD"]) { dx += 1; player.facingRight = true; }
-
-            player.isMoving = (dx !== 0 || dy !== 0);
-
-            if (player.isMoving) {
-                if (walkSound.paused) walkSound.play().catch(() => {});
-                
-                // Normalleştirilmiş hız (Çapraz giderken hızlanmaması için)
-                const angle = Math.atan2(dy, dx);
-                const vx = Math.cos(angle) * player.speed;
-                const vy = Math.sin(angle) * player.speed;
-                
-                const fw = 18, fh_up = 15, fh_down = 5;
-
-                // --- DUVAR SÜRTÜNMESİ (SLIDING) MANTIĞI ---
-                // X ve Y kontrollerini birbirinden ayırdık. 
-                // X'te engele çarpsa bile Y tuşuna basıyorsa dikeyde gitmeye devam eder.
-                
-                // X EKSENİ KONTROLÜ
-                if (!isWall(player.x + vx - fw, player.y - fh_up) && 
-                    !isWall(player.x + vx + fw, player.y - fh_up) && 
-                    !isWall(player.x + vx, player.y + fh_down)) {
-                    player.x += vx;
-                }
-
-                // Y EKSENİ KONTROLÜ
-                if (!isWall(player.x - fw, player.y + vy - fh_up) && 
-                    !isWall(player.x + fw, player.y + vy - fh_up) && 
-                    !isWall(player.x, player.y + vy + fh_down)) {
-                    player.y += vy;
-                }
-                
-                player.walkStep += 0.15;
-            } else { walkSound.pause(); walkSound.currentTime = 0; player.walkStep = 0; }
-
-            // KILL VE SABOTAJ (Aynı Kalıyor)
-            const distToVictim = Math.sqrt(Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2));
-            if (victim.alive && distToVictim < 80) {
-                killBtnUI.classList.add("active");
-                if (keys["KeyF"]) { player.killTimer = 100; player.facingRight = (victim.x > player.x); }
-            } else { killBtnUI.classList.remove("active"); }
-
-            let nearMachine = false;
-            machines.forEach(m => {
-                let d = Math.sqrt(Math.pow(player.x - m.x, 2) + Math.pow(player.y - m.y, 2));
-                if (d < 100 && !m.broken) { nearMachine = true; if (keys["KeyE"]) m.broken = true; }
-                if (m.broken && Math.random() > 0.7) {
-                    m.particles.push({ x: m.x, y: m.y - 20, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6-2, life: 1, color: Math.random()>0.5?"#fc0":"#f60"});
-                }
-                m.particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.02; if (p.life <= 0) m.particles.splice(i, 1); });
-            });
-            if (nearMachine) sabBtnUI.classList.add("active"); else sabBtnUI.classList.remove("active");
-
-            camera.x = player.x - canvas.width / 2;
-            camera.y = player.y - canvas.height / 2;
-        }
-
-        function draw() {
-            ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            const cx = canvas.width / 2, cy = canvas.height / 2;
             ctx.save();
-            ctx.beginPath(); ctx.arc(cx, cy, player.visionRadius, 0, Math.PI * 2); ctx.clip();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+
+            for (let i = 0; i <= rays; i++) {
+                const angle = i * step;
+                let rayX = player.x;
+                let rayY = player.y;
+                let dist = 0;
+                
+                // Her ışını duvar bulana kadar 8'er 8'er ilerlet (Hızlandırma için)
+                const jump = 8;
+                while (dist < player.visionRadius) {
+                    const nextX = rayX + Math.cos(angle) * jump;
+                    const nextY = rayY + Math.sin(angle) * jump;
+                    
+                    if (isWall(nextX, nextY)) break;
+                    
+                    rayX = nextX;
+                    rayY = nextY;
+                    dist += jump;
+                }
+                
+                ctx.lineTo(rayX - camera.x, rayY - camera.y);
+            }
+            ctx.closePath();
+            ctx.clip(); // Sadece bu ışınların içini çizdiriyoruz
+            
+            // Haritayı çiz
             ctx.translate(-camera.x, -camera.y);
             ctx.drawImage(mapImg, 0, 0);
-
+            
+            // Makineler ve dumanlar
             machines.forEach(m => {
                 if (m.broken) {
                     ctx.fillStyle = "rgba(100, 100, 100, 0.4)";
@@ -169,6 +120,7 @@
                 }
             });
 
+            // Kurban
             if (victim.alive) {
                 ctx.save(); ctx.translate(victim.x, victim.y);
                 ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
@@ -176,17 +128,71 @@
                 ctx.restore();
             }
             ctx.restore();
+        }
 
-            const grad = ctx.createRadialGradient(cx, cy, player.visionRadius * 0.4, cx, cy, player.visionRadius);
-            grad.addColorStop(0, "rgba(0,0,0,0)"); grad.addColorStop(1, "rgba(0,0,0,1)");
-            ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        window.addEventListener("keydown", e => keys[e.code] = true);
+        window.addEventListener("keyup", e => keys[e.code] = false);
 
+        function update() {
+            if (player.killTimer > 0) { player.killTimer--; if (player.killTimer === 0) victim.alive = false; walkSound.pause(); return; }
+            let dx = 0, dy = 0;
+            if (keys["KeyW"]) dy -= 1; if (keys["KeyS"]) dy += 1;
+            if (keys["KeyA"]) { dx -= 1; player.facingRight = false; }
+            if (keys["KeyD"]) { dx += 1; player.facingRight = true; }
+            player.isMoving = (dx !== 0 || dy !== 0);
+
+            if (player.isMoving) {
+                if (walkSound.paused) walkSound.play().catch(() => {});
+                const angle = Math.atan2(dy, dx);
+                const vx = Math.cos(angle) * player.speed;
+                const vy = Math.sin(angle) * player.speed;
+                const fw = 18, fh_up = 15, fh_down = 5;
+
+                if (!isWall(player.x + vx - fw, player.y - fh_up) && !isWall(player.x + vx + fw, player.y - fh_up) && !isWall(player.x + vx, player.y + fh_down)) player.x += vx;
+                if (!isWall(player.x - fw, player.y + vy - fh_up) && !isWall(player.x + fw, player.y + vy - fh_up) && !isWall(player.x, player.y + vy + fh_down)) player.y += vy;
+                player.walkStep += 0.15;
+            } else { walkSound.pause(); walkSound.currentTime = 0; player.walkStep = 0; }
+
+            const distToVictim = Math.sqrt(Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2));
+            if (victim.alive && distToVictim < 80) { killBtnUI.classList.add("active"); if (keys["KeyF"]) { player.killTimer = 100; player.facingRight = (victim.x > player.x); } } else { killBtnUI.classList.remove("active"); }
+
+            let nearMachine = false;
+            machines.forEach(m => {
+                let d = Math.sqrt(Math.pow(player.x - m.x, 2) + Math.pow(player.y - m.y, 2));
+                if (d < 100 && !m.broken) { nearMachine = true; if (keys["KeyE"]) m.broken = true; }
+                if (m.broken && Math.random() > 0.7) { m.particles.push({ x: m.x, y: m.y - 20, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6-2, life: 1, color: Math.random()>0.5?"#fc0":"#f60"}); }
+                m.particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.02; if (p.life <= 0) m.particles.splice(i, 1); });
+            });
+            if (nearMachine) sabBtnUI.classList.add("active"); else sabBtnUI.classList.remove("active");
+
+            camera.x = player.x - canvas.width / 2;
+            camera.y = player.y - canvas.height / 2;
+        }
+
+        function draw() {
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Raycasting ile Görüş Alanını Çiz
+            drawVision();
+
+            // Karakter Çizimi
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
             let currentImg = (player.isMoving && Math.floor(player.walkStep) % 2 === 1) ? charWalk : charIdle;
             if (player.killTimer > 0) currentImg = (player.killTimer > 50) ? killImg1 : killImg2;
-            ctx.save(); ctx.translate(cx, cy); if (!player.facingRight) ctx.scale(-1, 1);
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+            if (!player.facingRight) ctx.scale(-1, 1);
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
             ctx.drawImage(currentImg, -player.width/2, -player.height, player.width, player.height);
             ctx.restore();
+            
+            // Konum Göstergesi
+            ctx.fillStyle = "white";
+            ctx.font = "bold 14px Arial";
+            ctx.fillText("📍 X: " + Math.floor(player.x) + " Y: " + Math.floor(player.y), 20, canvas.height - 20);
         }
 
         function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
