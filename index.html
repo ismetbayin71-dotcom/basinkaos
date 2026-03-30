@@ -2,21 +2,21 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Collision Fix</title>
+    <title>Office Sabotage - Red Mask Engine</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
         canvas { background: #111; border: 2px solid #333; cursor: crosshair; }
         #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 10px; border: 1px solid #444; color: white; min-width: 180px; }
-        .status { font-weight: bold; padding: 2px 5px; border-radius: 3px; }
+        .status { font-weight: bold; padding: 2px 8px; border-radius: 4px; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <b>SİSTEM DURUMU</b><br>
-        Fizik: <span id="phys-status" class="status" style="background: #c0392b;">Yükleniyor...</span><br>
+        <b>GÜVENLİK SİSTEMİ</b><br>
+        Fizik Katmanı: <span id="phys-status" class="status" style="background: #c0392b;">Yükleniyor...</span><br>
         <hr style="border:0; border-top:1px solid #444; margin:10px 0;">
-        <small>W-A-S-D: Hareket<br>Mouse Tık: Git</small>
+        <small>W-A-S-D: Hareket<br>Sol Tık: Hedefe Git</small>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -26,10 +26,10 @@
         const ctx = canvas.getContext("2d");
         const physStatus = document.getElementById("phys-status");
 
-        // GÖRSELLERİ ÖZEL AYARLA YÜKLE
+        // Görselleri Cache Problemi Olmaması İçin Timestamp ile Yükle
         const mapImg = new Image();
-        mapImg.crossOrigin = "Anonymous"; 
-        mapImg.src = 'map.png?v=' + Date.now(); // Cache temizleme için timestamp
+        mapImg.crossOrigin = "Anonymous";
+        mapImg.src = 'map.png?v=' + Date.now();
 
         const collImg = new Image();
         collImg.crossOrigin = "Anonymous";
@@ -37,10 +37,10 @@
 
         let game = { zoom: 1.8 };
         let player = {
-            x: 450, y: 350, // Güvenli spawn
-            radius: 10,
+            x: 450, y: 300, // Merdiven yanı koridor (Güvenli başlangıç)
+            radius: 8,
             color: '#c0392b',
-            speed: 3.5,
+            speed: 3.2,
             angle: 0,
             visionRadius: 280,
             isMouseMoving: false
@@ -51,20 +51,20 @@
         let mouse = { x: 0, y: 0 };
         let collisionCtx = null;
 
-        let imagesLoaded = 0;
-        function checkLoad() {
-            imagesLoaded++;
-            if(imagesLoaded === 2) {
-                initCollision();
+        let loaded = 0;
+        function onImageLoad() {
+            loaded++;
+            if(loaded === 2) {
+                initPhysics();
                 physStatus.innerText = "AKTİF";
                 physStatus.style.background = "#27ae60";
                 requestAnimationFrame(gameLoop);
             }
         }
-        mapImg.onload = checkLoad;
-        collImg.onload = checkLoad;
+        mapImg.onload = onImageLoad;
+        collImg.onload = onImageLoad;
 
-        function initCollision() {
+        function initPhysics() {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = collImg.width;
             tempCanvas.height = collImg.height;
@@ -72,27 +72,28 @@
             collisionCtx.drawImage(collImg, 0, 0);
         }
 
-        // --- ÇARPIŞMA KONTROLÜ ---
+        // --- KIRMIZI RENK ALGILAMA (FİZİK) ---
         function canMoveTo(nx, ny) {
             if (!collisionCtx) return true;
 
-            // Karakterin etrafındaki 8 noktayı kontrol ederek duvarın içine sızmayı engelle
-            const checkPoints = [
+            // Karakterin etrafında 8 farklı noktayı kontrol et (Kenarlara çarpma hassasiyeti)
+            const side = 7; 
+            const points = [
                 {x: nx, y: ny},
-                {x: nx - 9, y: ny}, {x: nx + 9, y: ny},
-                {x: nx, y: ny - 9}, {x: nx, y: ny + 9},
-                {x: nx - 6, y: ny - 6}, {x: nx + 6, y: ny + 6}
+                {x: nx - side, y: ny}, {x: nx + side, y: ny},
+                {x: nx, y: ny - side}, {x: nx, y: ny + side},
+                {x: nx - 5, y: ny - 5}, {x: nx + 5, y: ny + 5}
             ];
 
-            for (let p of checkPoints) {
+            for (let p of points) {
+                // Harita sınırları dışı
                 if (p.x < 0 || p.x > collImg.width || p.y < 0 || p.y > collImg.height) return false;
 
                 const pixel = collisionCtx.getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data;
                 const r = pixel[0], g = pixel[1], b = pixel[2], a = pixel[3];
 
-                // Şeffaf olmayan ve Pembe (veya Pembeye yakın) olan her şeyi blokla
-                // Senin çizimindeki pembe tonu: R ve B yüksek, G düşük
-                if (a > 0 && r > 150 && b > 150 && g < 160) {
+                // Eğer piksel KIRMIZI ise (R > 150 ve G, B düşük)
+                if (a > 0 && r > 150 && g < 100 && b < 100) {
                     return false; 
                 }
             }
@@ -111,9 +112,12 @@
 
         function update() {
             let mx = 0, my = 0;
+
+            // Klavye Kontrolü
             if (keys["KeyW"]) my -= 1; if (keys["KeyS"]) my += 1;
             if (keys["KeyA"]) mx -= 1; if (keys["KeyD"]) mx += 1;
 
+            // Fare Kontrolü (Sol tık basılıysa)
             if (mx === 0 && my === 0 && player.isMouseMoving) {
                 const worldM = { x: mouse.x / game.zoom + camera.x, y: mouse.y / game.zoom + camera.y };
                 mx = worldM.x - player.x; my = worldM.y - player.y;
@@ -124,13 +128,14 @@
                 const nextX = player.x + Math.cos(angle) * player.speed;
                 const nextY = player.y + Math.sin(angle) * player.speed;
 
-                // Sürtünme fiziği (Kayma hissi)
+                // Eksenleri ayrı kontrol ederek "duvar boyunca kayma" sağla
                 if (canMoveTo(nextX, player.y)) player.x = nextX;
                 if (canMoveTo(player.x, nextY)) player.y = nextY;
                 
                 player.angle = angle;
             }
 
+            // Kamera Takibi
             camera.x = player.x - (canvas.width / 2) / game.zoom;
             camera.y = player.y - (canvas.height / 2) / game.zoom;
         }
@@ -141,18 +146,19 @@
             ctx.scale(game.zoom, game.zoom);
             ctx.translate(-camera.x, -camera.y);
 
+            // 1. Zemin Haritası
             ctx.drawImage(mapImg, 0, 0); 
             
-            // Oyuncu
+            // 2. Karakter
             ctx.save();
             ctx.translate(player.x, player.y);
             ctx.rotate(player.angle);
             ctx.fillStyle = player.color;
             ctx.beginPath(); ctx.arc(0, 0, player.radius, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#add8e6"; ctx.fillRect(3, -4, 7, 5); // Vizör
+            ctx.fillStyle = "#add8e6"; ctx.fillRect(2, -3, 6, 4); // Vizör
             ctx.restore();
 
-            // Among Us Görüş Sistemi
+            // 3. Among Us Görüş Alanı (Sis)
             applyVision();
 
             ctx.restore();
@@ -161,7 +167,7 @@
         function applyVision() {
             ctx.save();
             ctx.globalCompositeOperation = 'destination-in';
-            let grad = ctx.createRadialGradient(player.x, player.y, 50, player.x, player.y, player.visionRadius);
+            let grad = ctx.createRadialGradient(player.x, player.y, 40, player.x, player.y, player.visionRadius);
             grad.addColorStop(0, 'rgba(0,0,0,1)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
             ctx.fillStyle = grad;
             ctx.beginPath(); ctx.arc(player.x, player.y, player.visionRadius, 0, Math.PI * 2); ctx.fill();
