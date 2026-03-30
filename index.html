@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Machine Master</title>
+    <title>Office Sabotage - Spark & Smoke Edition</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
@@ -12,14 +12,14 @@
             position: absolute; bottom: 40px; width: 95px; height: 95px;
             border-radius: 50%; display: flex; align-items: center; justify-content: center;
             font-family: 'Arial Black', sans-serif; font-size: 12px; font-weight: bold;
-            transition: all 0.2s ease-in-out; user-select: none; border: 4px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s ease; user-select: none; border: 4px solid rgba(255, 255, 255, 0.1);
             color: rgba(255, 255, 255, 0.2); text-align: center;
         }
 
         #killBtn { right: 40px; background: rgba(255, 0, 0, 0.1); }
         #killBtn.active { background: rgba(220, 0, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 25px #ff0000; transform: scale(1.1); }
 
-        #sabotageBtn { right: 155px; background: rgba(255, 165, 0, 0.1); }
+        #sabotageBtn { right: 155px; background: rgba(255, 140, 0, 0.1); }
         #sabotageBtn.active { background: rgba(255, 140, 0, 0.9); border-color: #fff; color: #fff; box-shadow: 0 0 25px #ffa500; transform: scale(1.1); }
     </style>
 </head>
@@ -27,7 +27,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Sabote: E | Öldür: F | Pay: 100px</small>
+        <small>E: Sabote Et (Kıvılcım Efektli) | F: Öldür</small>
     </div>
 
     <div id="killBtn" class="game-btn">ÖLDÜR<br>(F)</div>
@@ -43,7 +43,7 @@
 
         const walkSound = new Audio('walk.mp3');
         walkSound.loop = true;
-        walkSound.volume = 0.03; // %3 Ultra kısık ses
+        walkSound.volume = 0.03;
 
         // GÖRSELLER
         const mapImg = new Image(); mapImg.src = 'map.png';
@@ -57,10 +57,10 @@
         let player = { x: 480, y: 350, width: 65, height: 91, speed: 4, visionRadius: 350, isMoving: false, facingRight: true, walkStep: 0, killTimer: 0 };
         let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
         
-        // --- GÜNCEL MAKİNE KOORDİNATLARI ---
+        // MAKİNE KOORDİNATLARI
         let machines = [
-            { x: 809, y: 483, broken: false }, // Görselden aldığımız tam konum
-            { x: 250, y: 200, broken: false }  // İkinci makine (Tahmini, X/Y ile değiştirebilirsin)
+            { x: 809, y: 483, broken: false, particles: [] },
+            { x: 250, y: 200, broken: false, particles: [] }
         ];
 
         let camera = { x: 0, y: 0 };
@@ -110,21 +110,37 @@
                 player.walkStep += 0.15;
             } else { walkSound.pause(); walkSound.currentTime = 0; player.walkStep = 0; }
 
-            // KILL MESAFE (80px)
+            // KILL MESAFE
             const distToVictim = Math.sqrt(Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2));
             if (victim.alive && distToVictim < 80) {
                 killBtnUI.classList.add("active");
                 if (keys["KeyF"]) { player.killTimer = 100; player.facingRight = (victim.x > player.x); }
             } else { killBtnUI.classList.remove("active"); }
 
-            // SABOTAJ MESAFE (100px PAY)
+            // SABOTAJ VE PARÇACIK GÜNCELLEME
             let nearMachine = false;
             machines.forEach(m => {
                 let d = Math.sqrt(Math.pow(player.x - m.x, 2) + Math.pow(player.y - m.y, 2));
-                if (d < 100 && !m.broken) { // 100 piksel pay burada
+                if (d < 100 && !m.broken) {
                     nearMachine = true;
                     if (keys["KeyE"]) m.broken = true;
                 }
+
+                // Kıvılcım Parçacıklarını Üret
+                if (m.broken && Math.random() > 0.7) {
+                    m.particles.push({
+                        x: m.x, y: m.y - 20,
+                        vx: (Math.random() - 0.5) * 6,
+                        vy: (Math.random() - 0.5) * 6 - 2,
+                        life: 1.0,
+                        color: Math.random() > 0.5 ? "#ffcc00" : "#ff6600"
+                    });
+                }
+                // Parçacıkları Hareket Ettir
+                m.particles.forEach((p, i) => {
+                    p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.02;
+                    if (p.life <= 0) m.particles.splice(i, 1);
+                });
             });
             if (nearMachine) sabBtnUI.classList.add("active"); else sabBtnUI.classList.remove("active");
 
@@ -140,15 +156,23 @@
             ctx.translate(-camera.x, -camera.y);
             ctx.drawImage(mapImg, 0, 0);
 
-            // SABOTAJ EFEKTİ
+            // Gelişmiş Sabotaj Efektleri
             machines.forEach(m => {
                 if (m.broken) {
-                    ctx.fillStyle = "rgba(180, 180, 180, 0.6)";
-                    for(let i=0; i<5; i++) {
+                    // 1. Duman Efekti
+                    ctx.fillStyle = "rgba(100, 100, 100, 0.4)";
+                    for(let i=0; i<3; i++) {
                         ctx.beginPath();
-                        ctx.arc(m.x + Math.sin(Date.now()/120 + i)*15, m.y - 40 - (i*15), 12 + i, 0, Math.PI*2);
+                        ctx.arc(m.x + Math.sin(Date.now()/200 + i)*15, m.y - 30 - (i*15), 15 + i*5, 0, Math.PI*2);
                         ctx.fill();
                     }
+                    // 2. Kıvılcım Efekti
+                    m.particles.forEach(p => {
+                        ctx.globalAlpha = p.life;
+                        ctx.fillStyle = p.color;
+                        ctx.fillRect(p.x, p.y, 3, 3);
+                    });
+                    ctx.globalAlpha = 1.0;
                 }
             });
 
@@ -170,11 +194,6 @@
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
             ctx.drawImage(currentImg, -player.width/2, -player.height, player.width, player.height);
             ctx.restore();
-
-            // KONUM GÖSTERGESİ
-            ctx.fillStyle = "white";
-            ctx.font = "bold 14px Arial";
-            ctx.fillText("📍 X: " + Math.floor(player.x) + " Y: " + Math.floor(player.y), 20, canvas.height - 20);
         }
 
         function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
