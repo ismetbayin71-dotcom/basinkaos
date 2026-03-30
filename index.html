@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Peter Physics Fix</title>
+    <title>Office Sabotage - Peter Physics v3</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; }
@@ -13,7 +13,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Fizik: Ayak Odaklı | Animasyon: Mesafe Bazlı</small>
+        <small>Durum: Ayaklar Yere Sabitlendi</small>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -28,13 +28,13 @@
         const charWalk = new Image(); charWalk.src = 'character_walk_1.png';
 
         let player = {
-            x: 480, y: 350,
-            width: 100, height: 140, 
-            speed: 4,
-            visionRadius: 350,
+            x: 480, y: 400, // Başlangıç yerini biraz daha aşağı aldım
+            width: 120, height: 180, // Peter 2X boyutu
+            speed: 3.5,
+            visionRadius: 360,
             isMoving: false,
             facingRight: true,
-            walkDistance: 0 // Animasyon hızı için katedilen yol
+            walkDistance: 0
         };
 
         let camera = { x: 0, y: 0 };
@@ -63,7 +63,7 @@
             if (!collisionCtx) return false;
             if (x < 0 || x >= collImg.width || y < 0 || y >= collImg.height) return true;
             const p = collisionCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            // Kırmızı maske kontrolü (Collision haritana göre)
+            // Kırmızı maske kontrolü (R > 150)
             return (p[0] > 150 && p[1] < 100);
         }
 
@@ -84,8 +84,9 @@
                 const nextX = player.x + Math.cos(angle) * player.speed;
                 const nextY = player.y + Math.sin(angle) * player.speed;
 
-                // Collision: Ayak tabanı genişliği için offset
-                const fw = 20; 
+                // Collision: Peter'ın ayak tabanı için geniş kontrol (fw: foot width)
+                const fw = 35; 
+                // Peter'ın tam ayak bastığı noktayı (player.y) kontrol ediyoruz
                 if (!isWall(nextX, player.y) && !isWall(nextX - fw, player.y) && !isWall(nextX + fw, player.y)) {
                     player.x = nextX;
                 }
@@ -93,7 +94,6 @@
                     player.y = nextY;
                 }
                 
-                // Sadece yürüdükçe animasyon ilerler
                 player.walkDistance += player.speed;
             }
 
@@ -105,7 +105,7 @@
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. HARİTA (Görüş Alanı Kısıtlı)
+            // 1. HARİTA (Görüş Maskesi ile)
             ctx.save();
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
@@ -118,32 +118,33 @@
             ctx.drawImage(mapImg, 0, 0);
             ctx.restore();
 
-            // 2. YUMUŞAK SİS (Kenarların zifiri siyah olması için)
-            const grad = ctx.createRadialGradient(cx, cy, player.visionRadius * 0.3, cx, cy, player.visionRadius);
+            // 2. YUMUŞAK SİS (Gradyan)
+            const grad = ctx.createRadialGradient(cx, cy, player.visionRadius * 0.2, cx, cy, player.visionRadius);
             grad.addColorStop(0, "transparent");
             grad.addColorStop(1, "black");
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 3. PETER (AYAKLARI YERE BASAN VERSİYON)
-            // Mesafe bazlı kare seçimi: Her 30 pikselde bir kare değişir
-            const isWalkFrame = Math.floor(player.walkDistance / 30) % 2 === 1;
+            // 3. PETER (AYAKLARI YERE SIFIRLANMIŞ)
+            const isWalkFrame = Math.floor(player.walkDistance / 35) % 2 === 1;
             const img = (player.isMoving && isWalkFrame) ? charWalk : charIdle;
 
             ctx.save();
-            ctx.translate(cx, cy); // Burası artık Peter'ın ayaklarının tam bastığı nokta
+            ctx.translate(cx, cy); 
             
             if (!player.facingRight) ctx.scale(-1, 1);
             
-            // Ayak Altı Gölgesi (PETER'IN AYAKLARIYLA BİTİŞİK)
-            ctx.fillStyle = "rgba(0,0,0,0.45)";
+            // Ayak Altı Gölgesi (PETER'IN AYAKLARINA YAPIŞIK)
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
             ctx.beginPath();
-            ctx.ellipse(0, -2, 35, 10, 0, 0, Math.PI * 2); 
+            // Gölgeyi tam olarak 0,0 noktasına (ayakların altına) koyduk
+            ctx.ellipse(0, 0, 45, 12, 0, 0, Math.PI * 2); 
             ctx.fill();
 
-            // Karakter Çizimi: Y değerini -height yaparak ayakları tam merkeze sıfırlıyoruz
-            // görselindeki boşluğu bu -player.height kapatacak.
-            ctx.drawImage(img, -player.width/2, -player.height + 5, player.width, player.height);
+            // Peter'ı Çiz: 
+            // Görseldeki boşluğu telafi etmek için Y değerini (-player.height + 15) yaptık.
+            // Bu 15 piksellik "pay", görseldeki havada kalma hissini yok eder.
+            ctx.drawImage(img, -player.width/2, -player.height + 15, player.width, player.height);
             
             ctx.restore();
         }
