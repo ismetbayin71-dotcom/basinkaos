@@ -2,21 +2,18 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Peter 2X & Fog</title>
+    <title>Office Sabotage - Peter 2X Fix</title>
     <style>
-        body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
-        canvas { background: #000; border: 2px solid #333; cursor: crosshair; }
-        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 10px; border: 1px solid #444; color: white; min-width: 180px; z-index: 10; }
-        .status { font-weight: bold; padding: 2px 8px; border-radius: 4px; }
+        body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        canvas { background: #111; border: 2px solid #333; }
+        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <b>OFFICE SABOTAGE</b><br>
-        Görüş: <span class="status" style="background: #2980b9;">SINIRLI</span><br>
-        <hr style="border:0; border-top:1px solid #444; margin:10px 0;">
-        <small>W-A-S-D: Hareket<br>Peter Boyutu: 2X</small>
+        <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
+        <small id="pos">Peter Hazır</small>
     </div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -25,17 +22,17 @@
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // GÖRSELLER
-        const mapImg = new Image(); mapImg.src = 'map.png'; // GitHub'daki yeni adıyla
+        // GÖRSELLER (GitHub isimlerine göre: map.png, collision.png)
+        const mapImg = new Image(); mapImg.src = 'map.png';
         const collImg = new Image(); collImg.src = 'collision.png';
         const charIdle = new Image(); charIdle.src = 'character.png';
         const charWalk = new Image(); charWalk.src = 'character_walk_1.png';
 
         let player = {
-            x: 450, y: 300,
-            width: 110, height: 160, // 2X Boyut (Eski: 55x80)
-            speed: 4,
-            visionRadius: 250, // Görüş alanı büyüklüğü
+            x: 480, y: 320, // Başlangıç yerini biraz kaydırdım (duvara sıkışmaması için)
+            width: 100, height: 140, // 2X Boyut
+            speed: 5,
+            visionRadius: 300, 
             isMoving: false,
             facingRight: true,
             animTimer: 0
@@ -44,11 +41,11 @@
         let camera = { x: 0, y: 0 };
         let keys = {};
         let collisionCtx = null;
-        let loadedCount = 0;
+        let loaded = 0;
 
         function checkLoad() {
-            loadedCount++;
-            if(loadedCount === 4) {
+            loaded++;
+            if(loaded === 4) {
                 initCollision();
                 requestAnimationFrame(gameLoop);
             }
@@ -63,20 +60,13 @@
             collisionCtx.drawImage(collImg, 0, 0);
         }
 
-        function canMoveTo(nx, ny) {
-            if (!collisionCtx) return true;
-            // Ayak ucu noktaları (2X boyuta göre genişletildi)
-            const checkPoints = [
-                {x: nx, y: ny},
-                {x: nx - 25, y: ny},
-                {x: nx + 25, y: ny}
-            ];
-            for (let p of checkPoints) {
-                if (p.x < 0 || p.x > collImg.width || p.y < 0 || p.y > collImg.height) return false;
-                const pixel = collisionCtx.getImageData(Math.floor(p.x), Math.floor(p.y), 1, 1).data;
-                if (pixel[3] > 0 && pixel[0] > 150) return false;
-            }
-            return true;
+        function isWall(x, y) {
+            if (!collisionCtx) return false;
+            // Harita sınırları dışı duvardır
+            if (x < 0 || x >= collImg.width || y < 0 || y >= collImg.height) return true;
+            const p = collisionCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+            // Sadece saf kırmızı çizgileri (duvarları) kontrol et
+            return (p[0] > 180 && p[1] < 100 && p[2] < 100);
         }
 
         window.addEventListener("keydown", e => keys[e.code] = true);
@@ -95,62 +85,61 @@
                 const angle = Math.atan2(dy, dx);
                 const nextX = player.x + Math.cos(angle) * player.speed;
                 const nextY = player.y + Math.sin(angle) * player.speed;
-                if (canMoveTo(nextX, player.y)) player.x = nextX;
-                if (canMoveTo(player.x, nextY)) player.y = nextY;
-                player.animTimer += 0.15;
-            } else { player.animTimer = 0; }
+
+                // Collision kontrolü: Ayak tabanının merkezini ve yanlarını kontrol et
+                if (!isWall(nextX, player.y) && !isWall(nextX-20, player.y) && !isWall(nextX+20, player.y)) {
+                    player.x = nextX;
+                }
+                if (!isWall(player.x, nextY) && !isWall(player.x-20, nextY) && !isWall(player.x+20, nextY)) {
+                    player.y = nextY;
+                }
+                player.animTimer += 0.2;
+            } else {
+                player.animTimer = 0;
+            }
 
             camera.x = player.x - canvas.width / 2;
             camera.y = player.y - canvas.height / 2;
+            document.getElementById("pos").innerText = `Konum: ${Math.round(player.x)}, ${Math.round(player.y)}`;
         }
 
         function draw() {
-            // 1. Temizle
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // 1. Zemini çiz (Siyah)
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 2. Haritayı çiz (Kamera takip eder)
+            // 2. Işık Efekti ve Harita Maskeleme
+            ctx.save();
+            
+            // Işık dairesi oluştur
+            ctx.beginPath();
+            ctx.arc(canvas.width/2, canvas.height/2 - 30, player.visionRadius, 0, Math.PI*2);
+            ctx.clip(); // Sadece bu dairenin içini çizilebilir yap
+
+            // Haritayı çiz (Sadece dairenin içi görünecek)
             ctx.save();
             ctx.translate(-camera.x, -camera.y);
             ctx.drawImage(mapImg, 0, 0);
             ctx.restore();
+            
+            ctx.restore();
 
-            // 3. SAVAŞ SİSİ (Fog of War) - Işık deliği açma
-            drawFog();
-
-            // 4. Karakter (En üstte ve ışığın merkezinde)
-            drawPlayer();
-        }
-
-        function drawFog() {
-            ctx.save();
-            // Tüm ekranı karart
-            ctx.fillStyle = "rgba(0, 0, 0, 0.92)"; 
+            // 3. Karanlık Yumuşatma (Kenarların Among Us gibi loş olması için)
+            const grad = ctx.createRadialGradient(
+                canvas.width/2, canvas.height/2 - 30, player.visionRadius * 0.4,
+                canvas.width/2, canvas.height/2 - 30, player.visionRadius
+            );
+            grad.addColorStop(0, "rgba(0,0,0,0)");
+            grad.addColorStop(1, "rgba(0,0,0,0.8)");
+            ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Oyuncunun olduğu yerde "delik" aç
-            ctx.globalCompositeOperation = 'destination-out';
-            
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2 - 40; // Peter'ın gövde merkezi hizası
-            
-            const grad = ctx.createRadialGradient(centerX, centerY, 50, centerX, centerY, player.visionRadius);
-            grad.addColorStop(0, "rgba(255, 255, 255, 1)"); // Merkez tam aydınlık
-            grad.addColorStop(1, "rgba(255, 255, 255, 0)"); // Kenarlar karanlık
-            
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, player.visionRadius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-        }
-
-        function drawPlayer() {
-            const currentImg = (player.isMoving && Math.floor(player.animTimer) % 2 === 0) ? charWalk : charIdle;
+            // 4. Karakter
+            const img = (player.isMoving && Math.floor(player.animTimer) % 2 === 0) ? charWalk : charIdle;
             ctx.save();
-            // Karakter her zaman ekranın ortasında (Kamera onu takip ediyor)
             ctx.translate(canvas.width / 2, canvas.height / 2);
             if (!player.facingRight) ctx.scale(-1, 1);
-            ctx.drawImage(currentImg, -player.width/2, -player.height + 10, player.width, player.height);
+            ctx.drawImage(img, -player.width/2, -player.height + 10, player.width, player.height);
             ctx.restore();
         }
 
