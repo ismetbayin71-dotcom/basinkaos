@@ -2,11 +2,13 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Fixed Hitbox</title>
+    <title>Office Sabotage - Final Sound & Hitbox</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
         #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; }
+        
+        /* ÖLDÜR BUTONU */
         #killBtn {
             position: absolute; bottom: 40px; right: 40px;
             width: 90px; height: 90px;
@@ -15,10 +17,8 @@
             border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             color: rgba(255, 255, 255, 0.3);
-            font-family: sans-serif;
-            font-size: 16px; font-weight: bold;
-            transition: all 0.2s;
-            user-select: none;
+            font-family: sans-serif; font-size: 16px; font-weight: bold;
+            transition: all 0.2s; user-select: none;
         }
         #killBtn.active {
             background: rgba(255, 0, 0, 0.9);
@@ -33,7 +33,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Hitbox Yükseltildi (Masa İçine Giriş Engellendi)</small>
+        <small>Ses: Aktif | Hitbox: Gelişmiş</small>
     </div>
 
     <div id="killBtn">ÖLDÜR</div>
@@ -45,6 +45,11 @@
         const ctx = canvas.getContext("2d");
         const killBtnUI = document.getElementById("killBtn");
 
+        // --- SES SİSTEMİ ---
+        const walkSound = new Audio('walk.mp3');
+        walkSound.loop = true;
+
+        // GÖRSELLER
         const mapImg = new Image(); mapImg.src = 'map.png';
         const collImg = new Image(); collImg.src = 'collision.png';
         const charIdle = new Image(); charIdle.src = 'character.png';
@@ -55,7 +60,7 @@
 
         let player = {
             x: 480, y: 350,
-            width: 65, height: 91,
+            width: 65, height: 91, // 1.3x Boyut
             speed: 4,
             visionRadius: 350,
             isMoving: false,
@@ -65,7 +70,6 @@
         };
 
         let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
-
         let camera = { x: 0, y: 0 };
         let keys = {};
         let collisionCtx = null;
@@ -75,8 +79,7 @@
             loaded++;
             if(loaded === 7) {
                 const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = collImg.width;
-                tempCanvas.height = collImg.height;
+                tempCanvas.width = collImg.width; tempCanvas.height = collImg.height;
                 collisionCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
                 collisionCtx.drawImage(collImg, 0, 0);
                 requestAnimationFrame(gameLoop);
@@ -88,16 +91,18 @@
             if (!collisionCtx) return false;
             if (x < 0 || x >= collImg.width || y < 0 || y >= collImg.height) return true;
             const p = collisionCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            return (p[0] > 150 && p[1] < 100);
+            return (p[0] > 150 && p[1] < 100); // Kırmızı alanlar duvardır
         }
 
         window.addEventListener("keydown", e => keys[e.code] = true);
         window.addEventListener("keyup", e => keys[e.code] = false);
 
         function update() {
+            // Kill animasyonu sırasında Peter donar
             if (player.killTimer > 0) {
                 player.killTimer--;
                 if (player.killTimer === 0) victim.alive = false;
+                walkSound.pause();
                 return;
             }
 
@@ -109,24 +114,32 @@
 
             player.isMoving = (dx !== 0 || dy !== 0);
 
+            // --- YÜRÜME SESİ KONTROLÜ ---
+            if (player.isMoving) {
+                if (walkSound.paused) walkSound.play().catch(() => {});
+            } else {
+                walkSound.pause();
+                walkSound.currentTime = 0;
+            }
+
             if (player.isMoving) {
                 const angle = Math.atan2(dy, dx);
                 const vx = Math.cos(angle) * player.speed;
                 const vy = Math.sin(angle) * player.speed;
 
-                // --- HITBOX GÜNCELLEMESİ ---
-                const fw = 18; // Ayak genişliği (sağ-sol)
-                const fh_up = 15; // Hitbox'ı YUKARIYA doğru 15 piksel yükselttik (Gövde koruması)
-                const fh_down = 5; // Ayak ucu payı
+                // --- GELİŞMİŞ HITBOX (MASA İÇİNE GİRMEYİ ENGELLER) ---
+                const fw = 18;       // Ayak genişliği
+                const fh_up = 15;    // Yukarı doğru koruma (gövde)
+                const fh_down = 5;    // Aşağı doğru koruma
 
-                // X Kontrolü (Gövde yüksekliğini de hesaba katarak kontrol eder)
+                // X Ekseni Kontrolü
                 if (!isWall(player.x + vx - fw, player.y - fh_up) && 
                     !isWall(player.x + vx + fw, player.y - fh_up) &&
                     !isWall(player.x + vx, player.y + fh_down)) {
                     player.x += vx;
                 }
 
-                // Y Kontrolü
+                // Y Ekseni Kontrolü
                 if (!isWall(player.x - fw, player.y + vy - fh_up) && 
                     !isWall(player.x + fw, player.y + vy - fh_up) &&
                     !isWall(player.x, player.y + vy + fh_down)) {
@@ -136,11 +149,19 @@
                 player.walkStep += 0.15;
             } else { player.walkStep = 0; }
 
+            // ÖLDÜR BUTONU VE MESAFE
             const distSq = Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2);
-            if (victim.alive && distSq < Math.pow(80, 2)) {
+            const canKill = victim.alive && distSq < Math.pow(80, 2);
+
+            if (canKill) {
                 killBtnUI.classList.add("active");
-                if (keys["KeyF"]) { player.killTimer = 100; player.facingRight = (victim.x > player.x); }
-            } else { killBtnUI.classList.remove("active"); }
+                if (keys["KeyF"]) {
+                    player.killTimer = 100; // 100 frame animasyon
+                    player.facingRight = (victim.x > player.x);
+                }
+            } else {
+                killBtnUI.classList.remove("active");
+            }
 
             camera.x = player.x - canvas.width / 2;
             camera.y = player.y - canvas.height / 2;
@@ -152,6 +173,7 @@
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
 
+            // 1. HARİTA (SIS EFEKTİ İLE)
             ctx.save();
             ctx.beginPath();
             ctx.arc(cx, cy, player.visionRadius, 0, Math.PI * 2);
@@ -159,6 +181,7 @@
             ctx.translate(-camera.x, -camera.y);
             ctx.drawImage(mapImg, 0, 0);
             
+            // NPC (KURBAN)
             if (victim.alive) {
                 ctx.save();
                 ctx.translate(victim.x, victim.y);
@@ -169,18 +192,24 @@
             }
             ctx.restore();
 
+            // SIS GEÇİŞİ
             const grad = ctx.createRadialGradient(cx, cy, player.visionRadius * 0.4, cx, cy, player.visionRadius);
             grad.addColorStop(0, "rgba(0,0,0,0)"); grad.addColorStop(1, "rgba(0,0,0,1)");
             ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // 2. PETER VE ANİMASYONLAR
             let currentImg = (player.isMoving && Math.floor(player.walkStep) % 2 === 1) ? charWalk : charIdle;
             if (player.killTimer > 0) currentImg = (player.killTimer > 50) ? killImg1 : killImg2;
 
             ctx.save();
             ctx.translate(cx, cy); 
             if (!player.facingRight) ctx.scale(-1, 1);
+            
+            // Peter'ın Gölgesi
             ctx.fillStyle = "rgba(0,0,0,0.5)";
             ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
+
+            // Peter Çizimi
             ctx.drawImage(currentImg, -player.width/2, -player.height, player.width, player.height);
             ctx.restore();
         }
