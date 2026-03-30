@@ -2,51 +2,75 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - NPC & Kill</title>
+    <title>Office Sabotage - Kill Button</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
         #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; }
+        
+        /* ÖLDÜR BUTONU TASARIMI */
+        #killBtn {
+            position: absolute; bottom: 40px; right: 40px;
+            width: 90px; height: 90px;
+            background: rgba(255, 0, 0, 0.2); /* Varsayılan: Yarı saydam sönük kırmızı */
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: rgba(255, 255, 255, 0.3);
+            font-family: 'Gilroy Extra Bold', sans-serif; /* Senin sevdiğin font */
+            font-size: 16px; font-weight: bold;
+            transition: all 0.2s; /* Geçiş animasyonu */
+            user-select: none;
+        }
+        /* Kurbana yaklaştığında aktifleşecek stil */
+        #killBtn.active {
+            background: rgba(255, 0, 0, 0.9);
+            border: 4px solid #fff;
+            color: #fff;
+            box-shadow: 0 0 25px #ff0000;
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>NPC & Kill Mekaniği | Mesafe Odaklı</small>
+        <small>Hareket: WASD | Öldür: F</small>
     </div>
+
+    <div id="killBtn">ÖLDÜR</div>
     
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
+        const killBtnUI = document.getElementById("killBtn");
 
-        // GÖRSELLER (GitHub klasöründeki dosya isimleri)
         const mapImg = new Image(); mapImg.src = 'map.png';
         const collImg = new Image(); collImg.src = 'collision.png';
         const charIdle = new Image(); charIdle.src = 'character.png';
         const charWalk = new Image(); charWalk.src = 'character_walk_1.png';
-        const victimImg = new Image(); victimImg.src = 'victim.png'; // Yeni NPC
-        const killImg1 = new Image(); killImg1.src = 'peter_kill_1.png'; // Yeni Kill Görseli 1
-        const killImg2 = new Image(); killImg2.src = 'peter_kill_2.png'; // Yeni Kill Görseli 2
+        const victimImg = new Image(); victimImg.src = 'victim.png';
+        const killImg1 = new Image(); killImg1.src = 'peter_kill_1.png';
+        const killImg2 = new Image(); killImg2.src = 'peter_kill_2.png';
 
         let player = {
             x: 480, y: 350,
-            width: 65, height: 91,
+            width: 65, height: 91, // 1.3x
             speed: 4,
             visionRadius: 350,
             isMoving: false,
             facingRight: true,
             walkStep: 0,
-            killTimer: 0 // Öldürme animasyonu süresi
+            killTimer: 0
         };
 
-        // NPC (Kurban)
         let victim = {
-            x: 580, y: 450, // Haritadaki konumu
-            width: 65, height: 91, // Peter 1.3x boyutuna uygun
-            alive: true // Kurban canlı mı?
+            x: 580, y: 450,
+            width: 65, height: 91,
+            alive: true
         };
 
         let camera = { x: 0, y: 0 };
@@ -71,7 +95,6 @@
             if (!collisionCtx) return false;
             if (x < 0 || x >= collImg.width || y < 0 || y >= collImg.height) return true;
             const p = collisionCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            // Kırmızı maske kontrolü (R > 150)
             return (p[0] > 150 && p[1] < 100);
         }
 
@@ -79,18 +102,10 @@
         window.addEventListener("keyup", e => keys[e.code] = false);
 
         function update() {
-            // Öldürme animasyonu oynarken Peter hareket edemesin
             if (player.killTimer > 0) {
-                player.killTimer -= 1; // Her frame'de azalt
-                player.walkStep = 0; // Animasyonu durdur
-                player.isMoving = false;
-                
-                // Öldürme animasyonu bittiğinde kurbanı öldür
-                if (player.killTimer === 0) {
-                    victim.alive = false;
-                }
-                
-                return; // Geri kalan hareketi atla
+                player.killTimer--;
+                if (player.killTimer === 0) victim.alive = false;
+                return;
             }
 
             let dx = 0, dy = 0;
@@ -105,40 +120,26 @@
                 const angle = Math.atan2(dy, dx);
                 const vx = Math.cos(angle) * player.speed;
                 const vy = Math.sin(angle) * player.speed;
+                const fw = 18; const fh = 4;
 
-                const fw = 18; // Ayak genişliği
-                const fh = 4;  // Ayak derinliği (Hassas çarpışma)
-
-                // --- BAĞIMSIZ EKSENLİ ÇARPIŞMA SİSTEMİ ---
-                let canMoveX = !isWall(player.x + vx - fw, player.y) && 
-                               !isWall(player.x + vx + fw, player.y);
-                if (canMoveX) player.x += vx;
-
-                let canMoveY = !isWall(player.x, player.y + vy - fh) && 
-                               !isWall(player.x, player.y + vy + fh);
-                if (canMoveY) player.y += vy;
-
-                player.walkStep += 0.15;
-            } else {
-                player.walkStep = 0;
-            }
-
-            // Kill Mekaniği (F Tuşu ile)
-            if (keys["KeyF"] && !player.isKill && victim.alive) {
-                const distSq = Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2);
-                const killRangeSq = Math.pow(60, 2); // Öldürme mesafesi (piksel kare)
+                if (!isWall(player.x + vx - fw, player.y) && !isWall(player.x + vx + fw, player.y)) player.x += vx;
+                if (!isWall(player.x, player.y + vy - fh) && !isWall(player.x, player.y + vy + fh)) player.y += vy;
                 
-                if (distSq < killRangeSq) {
-                    player.isKill = true;
-                    player.killTimer = 100; // Öldürme animasyonu süresi (yaklaşık 1.6 saniye)
-                    // Öldürme sırasında Peter kurbana baksın
+                player.walkStep += 0.15;
+            } else { player.walkStep = 0; }
+
+            // MESAFE KONTROLÜ VE BUTON PARLAMASI
+            const distSq = Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2);
+            const killRangeSq = Math.pow(80, 2); // 80 piksel mesafe
+
+            if (victim.alive && distSq < killRangeSq) {
+                killBtnUI.classList.add("active"); // Butonu parlat
+                if (keys["KeyF"]) {
+                    player.killTimer = 100;
                     player.facingRight = (victim.x > player.x);
                 }
-            }
-
-            // F tuşuna basmayı bıraktığında kill işlemini sıfırla
-            if (!keys["KeyF"]) {
-                player.isKill = false;
+            } else {
+                killBtnUI.classList.remove("active"); // Butonu söndür
             }
 
             camera.x = player.x - canvas.width / 2;
@@ -152,7 +153,6 @@
             const cx = canvas.width / 2;
             const cy = canvas.height / 2;
 
-            // 1. HARİTA (MASKE)
             ctx.save();
             ctx.beginPath();
             ctx.arc(cx, cy, player.visionRadius, 0, Math.PI * 2);
@@ -160,56 +160,29 @@
             ctx.translate(-camera.x, -camera.y);
             ctx.drawImage(mapImg, 0, 0);
             
-            // 2. NPC (KURBAN) ÇİZİMİ
             if (victim.alive) {
                 ctx.save();
-                ctx.translate(victim.x, victim.y); // Kurbanın ayak bastığı yer
-                
-                // GÖLGE: Kurbanın ayak altına
+                ctx.translate(victim.x, victim.y);
                 ctx.fillStyle = "rgba(0,0,0,0.5)";
-                ctx.beginPath();
-                ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2);
-                ctx.fill();
-
-                // NPC: Ayakları tam zemine (0,0) basıyor
+                ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
                 ctx.drawImage(victimImg, -victim.width/2, -victim.height, victim.width, victim.height);
                 ctx.restore();
             }
-            
             ctx.restore();
 
-            // 3. YUMUŞAK SIS (RADYAL GRADYAN)
             const grad = ctx.createRadialGradient(cx, cy, player.visionRadius * 0.4, cx, cy, player.visionRadius);
-            grad.addColorStop(0, "rgba(0,0,0,0)");
-            grad.addColorStop(1, "rgba(0,0,0,1)");
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            grad.addColorStop(0, "rgba(0,0,0,0)"); grad.addColorStop(1, "rgba(0,0,0,1)");
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 4. PETER VE KILL ANİMASYONU
             let currentImg = (player.isMoving && Math.floor(player.walkStep) % 2 === 1) ? charWalk : charIdle;
-            
-            // Öldürme animasyonu görselleri
-            if (player.killTimer > 0) {
-                if (player.killTimer > 50) {
-                    currentImg = killImg1; // Kill animasyonu 1. kare
-                } else {
-                    currentImg = killImg2; // Kill animasyonu 2. kare
-                }
-            }
+            if (player.killTimer > 0) currentImg = (player.killTimer > 50) ? killImg1 : killImg2;
 
             ctx.save();
-            ctx.translate(cx, cy); // Ayakların bastığı zemin noktası (0,0)
+            ctx.translate(cx, cy); 
             if (!player.facingRight) ctx.scale(-1, 1);
-            
-            // GÖLGE: Peter'ın ayak altına sıfırlanmış
             ctx.fillStyle = "rgba(0,0,0,0.5)";
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            // PETER ÇİZİMİ: Ayaklar tam (0,0) noktasına (gölgeye) basıyor
+            ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
             ctx.drawImage(currentImg, -player.width/2, -player.height, player.width, player.height);
-            
             ctx.restore();
         }
 
