@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Soft Sound</title>
+    <title>Office Sabotage - Ultra Soft Sound</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
@@ -21,7 +21,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Ses Seviyesi: %20 | Hitbox: Korunuyor</small>
+        <small>Ses Seviyesi: %10 (Yarı yarıya kısıldı)</small>
     </div>
 
     <div id="killBtn">ÖLDÜR</div>
@@ -32,9 +32,10 @@
         const ctx = canvas.getContext("2d");
         const killBtnUI = document.getElementById("killBtn");
 
+        // --- SES AYARI (%10) ---
         const walkSound = new Audio('walk.mp3');
         walkSound.loop = true;
-        walkSound.volume = 0.2; // Ses burada kısıldı
+        walkSound.volume = 0.1; // 0.2'den 0.1'e düşürüldü
 
         const mapImg = new Image(); mapImg.src = 'map.png';
         const collImg = new Image(); collImg.src = 'collision.png';
