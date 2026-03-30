@@ -2,29 +2,55 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Ultra Soft Sound</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office Sabotage - Ultra Kısık Ses</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
-        #ui { position: absolute; top: 15px; left: 15px; pointer-events: none; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; }
-        #killBtn {
-            position: absolute; bottom: 40px; right: 40px; width: 90px; height: 90px;
-            background: rgba(255, 0, 0, 0.2); border: 4px solid rgba(255, 255, 255, 0.1);
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            color: rgba(255, 255, 255, 0.3); font-family: sans-serif; font-size: 16px; font-weight: bold;
-            transition: all 0.2s; user-select: none;
+        
+        #ui { 
+            position: absolute; top: 15px; left: 15px; pointer-events: none; 
+            background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; 
+            color: white; font-family: sans-serif; z-index: 100; border: 1px solid #444; 
         }
-        #killBtn.active { background: rgba(255, 0, 0, 0.9); border: 4px solid #fff; color: #fff; box-shadow: 0 0 25px #ff0000; transform: scale(1.1); }
+
+        /* ÖLDÜR BUTONU TASARIMI */
+        #killBtn {
+            position: absolute; bottom: 40px; right: 40px;
+            width: 90px; height: 90px;
+            background: rgba(255, 0, 0, 0.1); /* Varsayılan çok silik */
+            border: 4px solid rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            color: rgba(255, 255, 255, 0.2);
+            font-family: 'Arial Black', sans-serif;
+            font-size: 14px; font-weight: bold;
+            transition: all 0.3s ease;
+            user-select: none;
+            z-index: 200;
+        }
+
+        /* Kurbana yaklaştığında aktifleşecek stil */
+        #killBtn.active {
+            background: rgba(220, 0, 0, 0.9);
+            border: 4px solid #fff;
+            color: #fff;
+            box-shadow: 0 0 30px #ff0000;
+            transform: scale(1.15);
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>Ses Seviyesi: %10 (Yarı yarıya kısıldı)</small>
+        <small>Ses Seviyesi: %3 | Öldür: F</small>
     </div>
 
+    <!-- Görsel Öldür Butonu -->
     <div id="killBtn">ÖLDÜR</div>
+    
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <script>
@@ -32,11 +58,12 @@
         const ctx = canvas.getContext("2d");
         const killBtnUI = document.getElementById("killBtn");
 
-        // --- SES AYARI (%10) ---
+        // --- SES AYARLARI ---
         const walkSound = new Audio('walk.mp3');
         walkSound.loop = true;
-        walkSound.volume = 0.1; // 0.2'den 0.1'e düşürüldü
+        walkSound.volume = 0.03; // %3 Ses seviyesi (Ultra kısık)
 
+        // GÖRSELLER
         const mapImg = new Image(); mapImg.src = 'map.png';
         const collImg = new Image(); collImg.src = 'collision.png';
         const charIdle = new Image(); charIdle.src = 'character.png';
@@ -45,18 +72,29 @@
         const killImg1 = new Image(); killImg1.src = 'peter_kill_1.png';
         const killImg2 = new Image(); killImg2.src = 'peter_kill_2.png';
 
-        let player = { x: 480, y: 350, width: 65, height: 91, speed: 4, visionRadius: 350, isMoving: false, facingRight: true, walkStep: 0, killTimer: 0 };
+        let player = {
+            x: 480, y: 350,
+            width: 65, height: 91,
+            speed: 4,
+            visionRadius: 350,
+            isMoving: false,
+            facingRight: true,
+            walkStep: 0,
+            killTimer: 0
+        };
+
         let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
         let camera = { x: 0, y: 0 };
         let keys = {};
         let collisionCtx = null;
-        let loaded = 0;
+        let loadedCount = 0;
 
         function checkLoad() {
-            loaded++;
-            if(loaded === 7) {
+            loadedCount++;
+            if(loadedCount === 7) {
                 const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = collImg.width; tempCanvas.height = collImg.height;
+                tempCanvas.width = collImg.width;
+                tempCanvas.height = collImg.height;
                 collisionCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
                 collisionCtx.drawImage(collImg, 0, 0);
                 requestAnimationFrame(gameLoop);
@@ -68,13 +106,14 @@
             if (!collisionCtx) return false;
             if (x < 0 || x >= collImg.width || y < 0 || y >= collImg.height) return true;
             const p = collisionCtx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
-            return (p[0] > 150 && p[1] < 100);
+            return (p[0] > 150 && p[1] < 100); // Kırmızı alanlar engel
         }
 
         window.addEventListener("keydown", e => keys[e.code] = true);
         window.addEventListener("keyup", e => keys[e.code] = false);
 
         function update() {
+            // Öldürme animasyonu sırasında hareket edemez
             if (player.killTimer > 0) {
                 player.killTimer--;
                 if (player.killTimer === 0) victim.alive = false;
@@ -83,51 +122,86 @@
             }
 
             let dx = 0, dy = 0;
-            if (keys["KeyW"]) dy -= 1; if (keys["KeyS"]) dy += 1;
+            if (keys["KeyW"]) dy -= 1;
+            if (keys["KeyS"]) dy += 1;
             if (keys["KeyA"]) { dx -= 1; player.facingRight = false; }
             if (keys["KeyD"]) { dx += 1; player.facingRight = true; }
 
             player.isMoving = (dx !== 0 || dy !== 0);
 
+            // Ses Kontrolü
             if (player.isMoving) {
                 if (walkSound.paused) walkSound.play().catch(() => {});
+            } else {
+                walkSound.pause();
+                walkSound.currentTime = 0;
+            }
+
+            if (player.isMoving) {
                 const angle = Math.atan2(dy, dx);
                 const vx = Math.cos(angle) * player.speed;
                 const vy = Math.sin(angle) * player.speed;
-                const fw = 18, fh_up = 15, fh_down = 5;
 
-                if (!isWall(player.x + vx - fw, player.y - fh_up) && !isWall(player.x + vx + fw, player.y - fh_up) && !isWall(player.x + vx, player.y + fh_down)) player.x += vx;
-                if (!isWall(player.x - fw, player.y + vy - fh_up) && !isWall(player.x + fw, player.y + vy - fh_up) && !isWall(player.x, player.y + vy + fh_down)) player.y += vy;
+                // GELİŞMİŞ HITBOX (Masa içine girişi engeller)
+                const fw = 18;       // Ayak genişliği
+                const fh_up = 15;    // Gövde yüksekliği payı
+                const fh_down = 5;
+
+                if (!isWall(player.x + vx - fw, player.y - fh_up) && 
+                    !isWall(player.x + vx + fw, player.y - fh_up) &&
+                    !isWall(player.x + vx, player.y + fh_down)) {
+                    player.x += vx;
+                }
+                if (!isWall(player.x - fw, player.y + vy - fh_up) && 
+                    !isWall(player.x + fw, player.y + vy - fh_up) &&
+                    !isWall(player.x, player.y + vy + fh_down)) {
+                    player.y += vy;
+                }
+                
                 player.walkStep += 0.15;
-            } else {
-                walkSound.pause(); walkSound.currentTime = 0;
-                player.walkStep = 0;
-            }
+            } else { player.walkStep = 0; }
 
+            // ÖLDÜRME BUTONU VE MESAFE KONTROLÜ
             const distSq = Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2);
-            if (victim.alive && distSq < Math.pow(80, 2)) {
+            const canKill = victim.alive && distSq < Math.pow(80, 2);
+
+            if (canKill) {
                 killBtnUI.classList.add("active");
-                if (keys["KeyF"]) { player.killTimer = 100; player.facingRight = (victim.x > player.x); }
-            } else { killBtnUI.classList.remove("active"); }
+                if (keys["KeyF"]) {
+                    player.killTimer = 100;
+                    player.facingRight = (victim.x > player.x);
+                }
+            } else {
+                killBtnUI.classList.remove("active");
+            }
 
             camera.x = player.x - canvas.width / 2;
             camera.y = player.y - canvas.height / 2;
         }
 
         function draw() {
-            ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            const cx = canvas.width / 2, cy = canvas.height / 2;
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
             ctx.save();
-            ctx.beginPath(); ctx.arc(cx, cy, player.visionRadius, 0, Math.PI * 2); ctx.clip();
+            ctx.beginPath();
+            ctx.arc(cx, cy, player.visionRadius, 0, Math.PI * 2);
+            ctx.clip();
             ctx.translate(-camera.x, -camera.y);
             ctx.drawImage(mapImg, 0, 0);
+            
             if (victim.alive) {
-                ctx.save(); ctx.translate(victim.x, victim.y);
-                ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.save();
+                ctx.translate(victim.x, victim.y);
+                ctx.fillStyle = "rgba(0,0,0,0.5)";
+                ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
                 ctx.drawImage(victimImg, -victim.width/2, -victim.height, victim.width, victim.height);
                 ctx.restore();
             }
             ctx.restore();
+
             const grad = ctx.createRadialGradient(cx, cy, player.visionRadius * 0.4, cx, cy, player.visionRadius);
             grad.addColorStop(0, "rgba(0,0,0,0)"); grad.addColorStop(1, "rgba(0,0,0,1)");
             ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -135,14 +209,20 @@
             let currentImg = (player.isMoving && Math.floor(player.walkStep) % 2 === 1) ? charWalk : charIdle;
             if (player.killTimer > 0) currentImg = (player.killTimer > 50) ? killImg1 : killImg2;
 
-            ctx.save(); ctx.translate(cx, cy); 
+            ctx.save();
+            ctx.translate(cx, cy); 
             if (!player.facingRight) ctx.scale(-1, 1);
-            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.beginPath(); ctx.ellipse(0, 0, 28, 8, 0, 0, Math.PI * 2); ctx.fill();
             ctx.drawImage(currentImg, -player.width/2, -player.height, player.width, player.height);
             ctx.restore();
         }
 
-        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
     </script>
 </body>
 </html>
