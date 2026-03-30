@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Spark & Smoke Edition</title>
+    <title>Office Sabotage - Smooth Sliding Edition</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #000; border: 2px solid #333; cursor: none; }
@@ -27,7 +27,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>E: Sabote Et (Kıvılcım Efektli) | F: Öldür</small>
+        <small>Hareket: WASD (Duvar Sürtünmesi Aktif)</small>
     </div>
 
     <div id="killBtn" class="game-btn">ÖLDÜR<br>(F)</div>
@@ -57,7 +57,6 @@
         let player = { x: 480, y: 350, width: 65, height: 91, speed: 4, visionRadius: 350, isMoving: false, facingRight: true, walkStep: 0, killTimer: 0 };
         let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
         
-        // MAKİNE KOORDİNATLARI
         let machines = [
             { x: 809, y: 483, broken: false, particles: [] },
             { x: 250, y: 200, broken: false, particles: [] }
@@ -102,45 +101,50 @@
 
             if (player.isMoving) {
                 if (walkSound.paused) walkSound.play().catch(() => {});
+                
+                // Normalleştirilmiş hız (Çapraz giderken hızlanmaması için)
                 const angle = Math.atan2(dy, dx);
-                const vx = Math.cos(angle) * player.speed, vy = Math.sin(angle) * player.speed;
+                const vx = Math.cos(angle) * player.speed;
+                const vy = Math.sin(angle) * player.speed;
+                
                 const fw = 18, fh_up = 15, fh_down = 5;
-                if (!isWall(player.x + vx - fw, player.y - fh_up) && !isWall(player.x + vx + fw, player.y - fh_up) && !isWall(player.x + vx, player.y + fh_down)) player.x += vx;
-                if (!isWall(player.x - fw, player.y + vy - fh_up) && !isWall(player.x + fw, player.y + vy - fh_up) && !isWall(player.x, player.y + vy + fh_down)) player.y += vy;
+
+                // --- DUVAR SÜRTÜNMESİ (SLIDING) MANTIĞI ---
+                // X ve Y kontrollerini birbirinden ayırdık. 
+                // X'te engele çarpsa bile Y tuşuna basıyorsa dikeyde gitmeye devam eder.
+                
+                // X EKSENİ KONTROLÜ
+                if (!isWall(player.x + vx - fw, player.y - fh_up) && 
+                    !isWall(player.x + vx + fw, player.y - fh_up) && 
+                    !isWall(player.x + vx, player.y + fh_down)) {
+                    player.x += vx;
+                }
+
+                // Y EKSENİ KONTROLÜ
+                if (!isWall(player.x - fw, player.y + vy - fh_up) && 
+                    !isWall(player.x + fw, player.y + vy - fh_up) && 
+                    !isWall(player.x, player.y + vy + fh_down)) {
+                    player.y += vy;
+                }
+                
                 player.walkStep += 0.15;
             } else { walkSound.pause(); walkSound.currentTime = 0; player.walkStep = 0; }
 
-            // KILL MESAFE
+            // KILL VE SABOTAJ (Aynı Kalıyor)
             const distToVictim = Math.sqrt(Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2));
             if (victim.alive && distToVictim < 80) {
                 killBtnUI.classList.add("active");
                 if (keys["KeyF"]) { player.killTimer = 100; player.facingRight = (victim.x > player.x); }
             } else { killBtnUI.classList.remove("active"); }
 
-            // SABOTAJ VE PARÇACIK GÜNCELLEME
             let nearMachine = false;
             machines.forEach(m => {
                 let d = Math.sqrt(Math.pow(player.x - m.x, 2) + Math.pow(player.y - m.y, 2));
-                if (d < 100 && !m.broken) {
-                    nearMachine = true;
-                    if (keys["KeyE"]) m.broken = true;
-                }
-
-                // Kıvılcım Parçacıklarını Üret
+                if (d < 100 && !m.broken) { nearMachine = true; if (keys["KeyE"]) m.broken = true; }
                 if (m.broken && Math.random() > 0.7) {
-                    m.particles.push({
-                        x: m.x, y: m.y - 20,
-                        vx: (Math.random() - 0.5) * 6,
-                        vy: (Math.random() - 0.5) * 6 - 2,
-                        life: 1.0,
-                        color: Math.random() > 0.5 ? "#ffcc00" : "#ff6600"
-                    });
+                    m.particles.push({ x: m.x, y: m.y - 20, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6-2, life: 1, color: Math.random()>0.5?"#fc0":"#f60"});
                 }
-                // Parçacıkları Hareket Ettir
-                m.particles.forEach((p, i) => {
-                    p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.02;
-                    if (p.life <= 0) m.particles.splice(i, 1);
-                });
+                m.particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= 0.02; if (p.life <= 0) m.particles.splice(i, 1); });
             });
             if (nearMachine) sabBtnUI.classList.add("active"); else sabBtnUI.classList.remove("active");
 
@@ -156,23 +160,12 @@
             ctx.translate(-camera.x, -camera.y);
             ctx.drawImage(mapImg, 0, 0);
 
-            // Gelişmiş Sabotaj Efektleri
             machines.forEach(m => {
                 if (m.broken) {
-                    // 1. Duman Efekti
                     ctx.fillStyle = "rgba(100, 100, 100, 0.4)";
-                    for(let i=0; i<3; i++) {
-                        ctx.beginPath();
-                        ctx.arc(m.x + Math.sin(Date.now()/200 + i)*15, m.y - 30 - (i*15), 15 + i*5, 0, Math.PI*2);
-                        ctx.fill();
-                    }
-                    // 2. Kıvılcım Efekti
-                    m.particles.forEach(p => {
-                        ctx.globalAlpha = p.life;
-                        ctx.fillStyle = p.color;
-                        ctx.fillRect(p.x, p.y, 3, 3);
-                    });
-                    ctx.globalAlpha = 1.0;
+                    for(let i=0; i<3; i++) { ctx.beginPath(); ctx.arc(m.x + Math.sin(Date.now()/200 + i)*15, m.y - 30 - (i*15), 15 + i*5, 0, Math.PI*2); ctx.fill(); }
+                    m.particles.forEach(p => { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 3, 3); });
+                    ctx.globalAlpha = 1;
                 }
             });
 
