@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Office Sabotage - Ultimate Performance</title>
+    <title>Office Sabotage - Body & Spark Edition</title>
     <style>
         body { background: #000; margin: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
         canvas { background: #050505; border: 2px solid #333; cursor: none; }
@@ -18,7 +18,7 @@
 
     <div id="ui">
         <b style="color:#e74c3c">OFFICE SABOTAGE</b><br>
-        <small>E: Sabote Et | F: Öldür | WASD: Hareket</small>
+        <small>E: Sabote Et | F: Öldür | Konum Sol Altta</small>
     </div>
 
     <div id="killBtn" class="game-btn">ÖLDÜR<br>(F)</div>
@@ -43,11 +43,12 @@
         const victimImg = new Image(); victimImg.src = 'victim.png';
         const killImg1 = new Image(); killImg1.src = 'peter_kill_1.png';
         const killImg2 = new Image(); killImg2.src = 'peter_kill_2.png';
+        const bodyImg = new Image(); bodyImg.src = 'body.png'; // Senin çizdiğin ceset
 
-        // OYUN DEĞİŞKENLERİ
+        // DEĞİŞKENLER
         let player = { x: 480, y: 350, width: 65, height: 91, speed: 4, visionRadius: 380, isMoving: false, facingRight: true, walkStep: 0, killTimer: 0 };
         let victim = { x: 580, y: 450, width: 65, height: 91, alive: true };
-        let machines = [{ x: 809, y: 483, broken: false, particles: [] }]; // Senin gönderdiğin konum
+        let machines = [{ x: 809, y: 483, broken: false, particles: [] }];
         
         let camera = { x: 0, y: 0 };
         let keys = {};
@@ -57,7 +58,7 @@
 
         function checkLoad() {
             loaded++;
-            if(loaded === 7) {
+            if(loaded === 8) { // Toplam 8 görsel
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = collImg.width; tempCanvas.height = collImg.height;
                 const tCtx = tempCanvas.getContext('2d');
@@ -67,18 +68,15 @@
                 requestAnimationFrame(gameLoop);
             }
         }
-        [mapImg, collImg, charIdle, charWalk, victimImg, killImg1, killImg2].forEach(img => img.onload = checkLoad);
+        [mapImg, collImg, charIdle, charWalk, victimImg, killImg1, killImg2, bodyImg].forEach(img => img.onload = checkLoad);
 
-        // HIZLI ÇARPIŞMA SİSTEMİ
         function getCollisionType(x, y) {
             if (!collisionData) return 0;
             const ix = Math.floor(x); const iy = Math.floor(y);
             if (ix < 0 || ix >= collW || iy < 0 || iy >= collH) return 1;
             const idx = (iy * collW + ix) * 4;
-            // Kırmızı (R > 150) -> Duvar (Görüşü keser)
-            if (collisionData[idx] > 150 && collisionData[idx+1] < 100) return 1; 
-            // Yeşil (G > 150) -> Masa (Görüşü kesmez ama Peter geçemez)
-            if (collisionData[idx+1] > 150 && collisionData[idx] < 100) return 2;
+            if (collisionData[idx] > 150 && collisionData[idx+1] < 100) return 1; // Duvar (Kırmızı)
+            if (collisionData[idx+1] > 150 && collisionData[idx] < 100) return 2; // Masa (Yeşil)
             return 0;
         }
 
@@ -105,17 +103,16 @@
                 const vx = Math.cos(angle) * player.speed;
                 const vy = Math.sin(angle) * player.speed;
 
-                // Peter hem kırmızıya hem yeşile çarpar (Gezinebilir alan = 0)
                 if (getCollisionType(player.x + vx, player.y) === 0) player.x += vx;
                 if (getCollisionType(player.x, player.y + vy) === 0) player.y += vy;
                 player.walkStep += 0.15;
             } else { walkSound.pause(); player.walkStep = 0; }
 
-            // SABOTAJ KONTROLÜ (X: 809 Y: 483 İçin)
+            // SABOTAJ
             let nearMachine = false;
             machines.forEach(m => {
                 let d = Math.sqrt(Math.pow(player.x - m.x, 2) + Math.pow(player.y - m.y, 2));
-                if (d < 140 && !m.broken) { // Mesafe 140'a çıkarıldı
+                if (d < 140 && !m.broken) { 
                     nearMachine = true;
                     if (keys["KeyE"]) m.broken = true;
                 }
@@ -126,7 +123,7 @@
             });
             if (nearMachine) sabBtnUI.classList.add("active"); else sabBtnUI.classList.remove("active");
 
-            // KILL KONTROLÜ
+            // KILL
             const distToVictim = Math.sqrt(Math.pow(player.x - victim.x, 2) + Math.pow(player.y - victim.y, 2));
             if (victim.alive && distToVictim < 85) {
                 killBtnUI.classList.add("active");
@@ -139,27 +136,28 @@
 
         function draw() {
             ctx.fillStyle = "#050505"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            const cx = canvas.width / 2; const cy = canvas.height / 2;
+            const cx = canvas.width / 2, cy = canvas.height / 2;
 
-            // 1. ADIM: SİS (Haritayı %15 gör)
+            // 1. SİS KATMANI
             ctx.save(); ctx.globalAlpha = 0.15; ctx.drawImage(mapImg, -camera.x, -camera.y); ctx.restore();
 
-            // 2. ADIM: AYDINLIK ALAN (Raycasting)
+            // 2. GÖRÜŞ ALANI
             ctx.save();
             ctx.beginPath(); ctx.moveTo(cx, cy);
-            const rayCount = 180;
-            for (let i = 0; i <= rayCount; i++) {
-                const angle = (i * (360 / rayCount) * Math.PI) / 180;
+            for (let i = 0; i <= 180; i++) {
+                const angle = (i * (360 / 180) * Math.PI) / 180;
                 let rx = player.x, ry = player.y;
                 for (let d = 0; d < player.visionRadius; d += 8) {
                     rx += Math.cos(angle) * 8; ry += Math.sin(angle) * 8;
-                    if (getCollisionType(rx, ry) === 1) break; // Sadece kırmızı duvar görüşü keser
+                    if (getCollisionType(rx, ry) === 1) break;
                 }
                 ctx.lineTo(rx - camera.x, ry - camera.y);
             }
             ctx.closePath(); ctx.clip();
 
             ctx.drawImage(mapImg, -camera.x, -camera.y);
+
+            // Makine Efektleri
             machines.forEach(m => {
                 if (m.broken) {
                     ctx.fillStyle = "rgba(100, 100, 100, 0.4)";
@@ -168,22 +166,28 @@
                     ctx.globalAlpha = 1;
                 }
             });
-            if (victim.alive) ctx.drawImage(victimImg, victim.x - camera.x - victim.width/2, victim.y - camera.y - victim.height, victim.width, victim.height);
+
+            // KURBAN VE CESET
+            if (victim.alive) {
+                ctx.drawImage(victimImg, victim.x - camera.x - victim.width/2, victim.y - camera.y - victim.height, victim.width, victim.height);
+            } else {
+                // Ceset çizimi (Peter'ın öldürdüğü yerde kalır)
+                ctx.drawImage(bodyImg, victim.x - camera.x - victim.width/2, victim.y - camera.y - victim.height + 30, victim.width, victim.height);
+            }
             ctx.restore();
 
-            // 3. ADIM: KENAR YUMUŞATMA
+            // 3. KENAR YUMUŞATMA
             const grad = ctx.createRadialGradient(cx, cy, 150, cx, cy, player.visionRadius);
             grad.addColorStop(0, "rgba(0,0,0,0)"); grad.addColorStop(1, "rgba(0,0,0,0.85)");
             ctx.fillStyle = grad; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 4. ADIM: PETER ÇİZİMİ
+            // 4. PETER
             let currentImg = (player.isMoving && Math.floor(player.walkStep) % 2 === 1) ? charWalk : charIdle;
             if (player.killTimer > 0) currentImg = (player.killTimer > 50) ? killImg1 : killImg2;
             ctx.save(); ctx.translate(cx, cy); if (!player.facingRight) ctx.scale(-1, 1);
             ctx.drawImage(currentImg, -player.width/2, -player.height, player.width, player.height);
             ctx.restore();
 
-            // Debug Konum
             ctx.fillStyle = "white"; ctx.font = "12px Arial";
             ctx.fillText("X: " + Math.floor(player.x) + " Y: " + Math.floor(player.y), 20, canvas.height - 20);
         }
